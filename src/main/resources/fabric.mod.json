@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "kooda-addon",
+  "version": "0.1.0",
+  "name": "Kooda",
+  "description": "Kooda Addon: Advanced utility and anarchy modules for Meteor Client.",
+  "authors": [
+    "TheOne"
+  ],
+  "contact": {
+    "repo": "https://github.com/tu-repositorio/Kooda"
+  },
+  "icon": "assets/icon/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "meteor": [
+      "pwn.noobs.trouserstreak.KoodaAddon"
+    ]
+  },
+  "accessWidener": "streak-addon.accesswidener",
+  "mixins": [
+    "streak.mixins.json"
+  ],
+  "custom": {
+    "meteor-client:color": "0, 255, 255"
+  },
+  "depends": {
+    "java": ">=21",
+    "minecraft": ">=${mc_version}",
+    "meteor-client": "*"
+  }
+}

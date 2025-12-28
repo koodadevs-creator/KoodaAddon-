@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "package": "pwn.noobs.trouserstreak.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "InventoryS2CPacketAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [
+    "MixinClientPlayNetworkHandler",
+    "MixinItemStack",
+    "SplashOverlayMixin"
+
+  ]
+}
