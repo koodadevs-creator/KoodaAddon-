@@ -58,6 +58,7 @@ public class KoodaAddon extends MeteorAddon {
         // --- MODULE REGISTRATION ---
         // Registering modules here. Ensure AntiBookBan exists in your modules folder.
         Modules.get().add(new AntiBookBan());
+        Modules.get().add(new KoodaSelfTrap());
         Modules.get().add(new KoodaStorageESP());
         Modules.get().add(new KoodaHoleESP());
         Modules.get().add(new AutoToxic());

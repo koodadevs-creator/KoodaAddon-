@@ -7,26 +7,32 @@ import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
+import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.thrown.EnderPearlEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 
@@ -44,620 +50,545 @@ import java.util.concurrent.Executors;
 public class KoodaNotifierHud extends HudElement {
     public static final HudElementInfo<KoodaNotifierHud> INFO = new HudElementInfo<>(
             KoodaAddon.KOODA_HUD_GROUP,
-            "kooda-notifier",
-            "Kooda Notifier",
-            "Mega Robust system with Custom Sounds (.wav) and 8 Visual Styles.",
+            "kooda-notifier-ultimate",
+            "Kooda Notifier Ultimate",
+            "The complete notification suite. RGB, Pulse Animations, and robust engine.",
             KoodaNotifierHud::new
     );
 
     private final MinecraftClient mc = MinecraftClient.getInstance();
 
+    // --- GROUPS ---
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
-    private final SettingGroup sgVisual = settings.createGroup("Visual Range");
-    private final SettingGroup sgCombat = settings.createGroup("Combat");
-    private final SettingGroup sgMisc = settings.createGroup("Misc");
-    private final SettingGroup sgStyle = settings.createGroup("Style");
+    private final SettingGroup sgTriggers = settings.createGroup("Triggers");
+    private final SettingGroup sgVisual = settings.createGroup("Visuals & Style");
+    private final SettingGroup sgColors = settings.createGroup("Colors");
 
-    // --- GENERAL SETTINGS ---
+    // --- GENERAL ---
     private final Setting<Double> scale = sgGeneral.add(new DoubleSetting.Builder()
-            .name("scale").description("Notification scale.").defaultValue(1.0).min(0.5).max(3.0).sliderMax(3.0).build());
+            .name("scale").description("Global scale.").defaultValue(1.0).min(0.5).sliderMax(2.0).build());
     private final Setting<Double> displayTime = sgGeneral.add(new DoubleSetting.Builder()
             .name("duration").description("Time on screen (seconds).").defaultValue(3.0).min(1.0).max(10.0).build());
-    private final Setting<Boolean> sounds = sgGeneral.add(new BoolSetting.Builder()
-            .name("sounds").description("Play a sound when a notification arrives.").defaultValue(true).build());
+    private final Setting<Integer> maxNotifs = sgGeneral.add(new IntSetting.Builder()
+            .name("max-visible").description("Limit notifications to prevent spam.").defaultValue(8).min(1).build());
+    private final Setting<Boolean> logChat = sgGeneral.add(new BoolSetting.Builder()
+            .name("log-to-chat").description("Print notifications to local chat.").defaultValue(false).build());
 
-    // Custom Sound Toggle
+    // --- AUDIO ---
+    private final Setting<Boolean> sounds = sgGeneral.add(new BoolSetting.Builder()
+            .name("sounds").description("Play sounds.").defaultValue(true).build());
+    private final Setting<Boolean> pitchScaling = sgGeneral.add(new BoolSetting.Builder()
+            .name("pitch-scaling").description("Higher pitch for stacks.").defaultValue(true).visible(sounds::get).build());
     private final Setting<Boolean> customSound = sgGeneral.add(new BoolSetting.Builder()
-            .name("custom-sound")
+            .name("custom-wav")
             .description("Plays 'notification.wav' from .minecraft/KOODA/NotificatorHudSound/")
             .defaultValue(false)
             .visible(sounds::get)
             .build()
     );
 
-    private final Setting<SettingColor> backgroundColor = sgGeneral.add(new ColorSetting.Builder()
-            .name("background-color")
-            .description("Background color for Standard style.")
-            .defaultValue(new SettingColor(20, 20, 20, 150))
-            .build()
-    );
+    // --- TRIGGERS ---
+    private final Setting<Boolean> popEnabled = sgTriggers.add(new BoolSetting.Builder()
+            .name("totem-pops").defaultValue(true).build());
+    private final Setting<Boolean> burrowEnabled = sgTriggers.add(new BoolSetting.Builder()
+            .name("burrow-detect").defaultValue(true).build());
+    private final Setting<Boolean> pearlEnabled = sgTriggers.add(new BoolSetting.Builder()
+            .name("pearl-throws").defaultValue(true).build());
+    private final Setting<Boolean> killFeed = sgTriggers.add(new BoolSetting.Builder()
+            .name("kill-feed").defaultValue(true).build());
+    private final Setting<Boolean> mentionEnabled = sgTriggers.add(new BoolSetting.Builder()
+            .name("chat-mentions").description("Notify when mentioned in chat.").defaultValue(true).build());
+    private final Setting<Boolean> visualRange = sgTriggers.add(new BoolSetting.Builder()
+            .name("visual-range").defaultValue(true).build());
+    private final Setting<Boolean> armorEnabled = sgTriggers.add(new BoolSetting.Builder()
+            .name("low-armor").defaultValue(true).build());
+    private final Setting<Boolean> toolEnabled = sgTriggers.add(new BoolSetting.Builder()
+            .name("low-tool").description("Warn for main hand tool durability.").defaultValue(true).build());
+    private final Setting<Integer> durabilityThreshold = sgTriggers.add(new IntSetting.Builder()
+            .name("durability-%").defaultValue(30).min(1).max(99).visible(() -> armorEnabled.get() || toolEnabled.get()).build());
+    private final Setting<Boolean> lagEnabled = sgTriggers.add(new BoolSetting.Builder()
+            .name("server-lag").defaultValue(true).build());
 
-    // --- VISUAL RANGE ---
-    private final Setting<Boolean> vrEnabled = sgVisual.add(new BoolSetting.Builder()
-            .name("enable-visual-range").description("Notify entering/leaving.").defaultValue(true).build());
-    private final Setting<Boolean> vrEnter = sgVisual.add(new BoolSetting.Builder()
-            .name("notify-enter").description("Notify when players enter.").defaultValue(true).visible(vrEnabled::get).build());
-    private final Setting<Boolean> vrLeave = sgVisual.add(new BoolSetting.Builder()
-            .name("notify-leave").description("Notify when players leave.").defaultValue(true).visible(vrEnabled::get).build());
-    private final Setting<Boolean> ignoreFriends = sgVisual.add(new BoolSetting.Builder()
-            .name("ignore-friends").defaultValue(true).visible(vrEnabled::get).build());
+    // --- VISUALS ---
+    private final Setting<Style> style = sgVisual.add(new EnumSetting.Builder<Style>()
+            .name("style").description("Visual Theme.").defaultValue(Style.Kooda).build());
+    private final Setting<Animation> animType = sgVisual.add(new EnumSetting.Builder<Animation>()
+            .name("animation").description("Entry/Exit animation.").defaultValue(Animation.Slide).build());
+    private final Setting<Boolean> timeBar = sgVisual.add(new BoolSetting.Builder()
+            .name("time-bar").description("Show progress bar.").defaultValue(true).build());
 
-    // --- COMBAT ---
-    private final Setting<Boolean> popEnabled = sgCombat.add(new BoolSetting.Builder()
-            .name("totem-pops").description("Notify when someone pops.").defaultValue(true).build());
-    private final Setting<Boolean> burrowEnabled = sgCombat.add(new BoolSetting.Builder()
-            .name("burrow-detect").description("Notify when someone is burrowed.").defaultValue(true).build());
-    private final Setting<Boolean> pearlEnabled = sgCombat.add(new BoolSetting.Builder()
-            .name("pearl-throws").description("Notify pearl throws.").defaultValue(true).build());
-    private final Setting<Boolean> killFeed = sgCombat.add(new BoolSetting.Builder()
-            .name("kill-feed").description("Notify kills and deaths.").defaultValue(true).build());
+    // --- COLORS ---
+    private final Setting<Boolean> chroma = sgColors.add(new BoolSetting.Builder()
+            .name("chroma-mode").description("RGB mode for accents.").defaultValue(false).build());
 
-    // --- MISC ---
-    private final Setting<Boolean> mentionEnabled = sgMisc.add(new BoolSetting.Builder()
-            .name("chat-mentions").description("Notify when your name is mentioned.").defaultValue(true).build());
-
-    // --- STYLE SETTINGS ---
-    private final Setting<Style> style = sgStyle.add(new EnumSetting.Builder<Style>()
-            .name("style").description("Visual style of the notifications.").defaultValue(Style.Kooda).build());
-
-    private final Setting<SettingColor> colorInfo = sgStyle.add(new ColorSetting.Builder()
-            .name("info-color").description("Color for general info.").defaultValue(new SettingColor(100, 200, 255)).build());
-    private final Setting<SettingColor> colorWarn = sgStyle.add(new ColorSetting.Builder()
-            .name("warn-color").description("Color for warnings (Pops/Burrow).").defaultValue(new SettingColor(255, 170, 0)).build());
-    private final Setting<SettingColor> colorDanger = sgStyle.add(new ColorSetting.Builder()
-            .name("danger-color").description("Color for danger (Death/Kill).").defaultValue(new SettingColor(255, 50, 50)).build());
-    private final Setting<SettingColor> colorText = sgStyle.add(new ColorSetting.Builder()
+    private final Setting<SettingColor> colorInfo = sgColors.add(new ColorSetting.Builder()
+            .name("info-color").defaultValue(new SettingColor(0, 200, 255)).build());
+    private final Setting<SettingColor> colorWarn = sgColors.add(new ColorSetting.Builder()
+            .name("warn-color").defaultValue(new SettingColor(255, 100, 0)).build()); // Sunset Orange
+    private final Setting<SettingColor> colorDanger = sgColors.add(new ColorSetting.Builder()
+            .name("danger-color").defaultValue(new SettingColor(255, 50, 50)).build());
+    private final Setting<SettingColor> colorText = sgColors.add(new ColorSetting.Builder()
             .name("text-color").defaultValue(new SettingColor(255, 255, 255)).build());
+    private final Setting<SettingColor> colorBg = sgColors.add(new ColorSetting.Builder()
+            .name("background-color").defaultValue(new SettingColor(20, 20, 20, 160)).build());
 
-    // --- INTERNAL STATE (Thread Safe) ---
-    private final List<Notification> notifications = new CopyOnWriteArrayList<>();
-    private final Map<UUID, String> knownPlayers = new ConcurrentHashMap<>();
+    // --- VARIABLES ---
+    private final CopyOnWriteArrayList<Notification> notifications = new CopyOnWriteArrayList<>();
     private final Map<UUID, Integer> popCounts = new ConcurrentHashMap<>();
     private final Set<UUID> burrowedPlayers = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Map<UUID, String> knownPlayers = new ConcurrentHashMap<>();
 
     private PlayerEntity lastTarget = null;
     private long lastAttackTime = 0;
+    private long lastPacketTime = 0;
+    private boolean lagNotified = false;
+    private boolean armorNotified = false;
+    private boolean toolNotified = false;
 
-    // --- SOUND SYSTEM ---
     private final File cachedSoundFile;
-    private final ExecutorService soundExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService soundExecutor = Executors.newCachedThreadPool();
 
     public KoodaNotifierHud() {
         super(INFO);
         MeteorClient.EVENT_BUS.subscribe(this);
-
         File soundDir = new File(new File(MeteorClient.FOLDER.getParentFile(), "KOODA"), "NotificatorHudSound");
-        if (!soundDir.exists() && !soundDir.mkdirs()) {
-            KoodaAddon.LOG.warn("Failed to create Kooda sound directory.");
-        }
+        if (!soundDir.exists()) soundDir.mkdirs();
         cachedSoundFile = new File(soundDir, "notification.wav");
     }
 
     // ================= EVENTS =================
 
     @EventHandler
-    @SuppressWarnings("unused")
     private void onGameLeave(GameLeftEvent event) {
-        knownPlayers.clear();
-        popCounts.clear();
-        burrowedPlayers.clear();
         notifications.clear();
+        popCounts.clear();
+        knownPlayers.clear();
+        burrowedPlayers.clear();
     }
 
     @EventHandler
-    @SuppressWarnings("unused")
+    private void onTick(TickEvent.Post event) {
+        if (mc.world == null || mc.player == null) return;
+
+        long now = System.currentTimeMillis();
+        notifications.removeIf(n -> now - n.startTime > (displayTime.get() * 1000) + 1000);
+
+        // Limit Queue Size
+        while (notifications.size() > maxNotifs.get()) {
+            notifications.remove(notifications.size() - 1);
+        }
+
+        // Lag
+        if (lagEnabled.get()) {
+            long diff = now - lastPacketTime;
+            if (diff > 3000 && !lagNotified) {
+                addNotification("Server Lag Detected!", Type.WARNING, Items.CLOCK.getDefaultStack());
+                lagNotified = true;
+            } else if (diff < 1000) lagNotified = false;
+        }
+
+        // Armor Check
+        if (armorEnabled.get()) {
+            boolean low = false;
+            EquipmentSlot[] slots = { EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET };
+            for (EquipmentSlot slot : slots) {
+                ItemStack s = mc.player.getEquippedStack(slot);
+                if (!s.isEmpty() && s.isDamageable()) {
+                    int pct = (int)(((double)(s.getMaxDamage() - s.getDamage()) / s.getMaxDamage()) * 100);
+                    if (pct <= durabilityThreshold.get()) { low = true; break; }
+                }
+            }
+            if (low && !armorNotified) {
+                addNotification("Armor Critical < " + durabilityThreshold.get() + "%", Type.DANGER, Items.NETHERITE_CHESTPLATE.getDefaultStack());
+                armorNotified = true;
+            } else if (!low) armorNotified = false;
+        }
+
+        // Tool Check
+        if (toolEnabled.get()) {
+            ItemStack main = mc.player.getMainHandStack();
+            if (!main.isEmpty() && main.isDamageable()) {
+                int pct = (int)(((double)(main.getMaxDamage() - main.getDamage()) / main.getMaxDamage()) * 100);
+                if (pct <= durabilityThreshold.get()) {
+                    if (!toolNotified) {
+                        addNotification("Tool Critical < " + durabilityThreshold.get() + "%", Type.DANGER, main.copy());
+                        toolNotified = true;
+                    }
+                } else toolNotified = false;
+            } else toolNotified = false;
+        }
+
+        if (visualRange.get()) updateVisualRange();
+        if (burrowEnabled.get()) updateBurrow();
+    }
+
+    @EventHandler
+    private void onPacketReceive(PacketEvent.Receive event) {
+        if (mc.world == null) return;
+
+        lastPacketTime = System.currentTimeMillis();
+        if (event.packet instanceof EntityStatusS2CPacket p) {
+            Entity e = p.getEntity(mc.world);
+
+            // Pop
+            if (popEnabled.get() && p.getStatus() == 35 && e instanceof PlayerEntity player && !player.equals(mc.player)) {
+                int c = popCounts.getOrDefault(player.getUuid(), 0) + 1;
+                popCounts.put(player.getUuid(), c);
+                addNotification(player.getName().getString() + " popped " + c + "!", Type.WARNING, Items.TOTEM_OF_UNDYING.getDefaultStack());
+            }
+
+            // Death
+            if (killFeed.get() && p.getStatus() == 3 && e instanceof PlayerEntity player) {
+                if (player.equals(mc.player)) {
+                    addNotification("You died.", Type.DANGER, Items.SKELETON_SKULL.getDefaultStack());
+                    popCounts.remove(mc.player.getUuid());
+                } else if (lastTarget != null && lastTarget.equals(player) && System.currentTimeMillis() - lastAttackTime < 5000) {
+                    addNotification("Killed " + player.getName().getString(), Type.INFO, Items.DIAMOND_SWORD.getDefaultStack());
+                    popCounts.remove(player.getUuid());
+                }
+            }
+        }
+    }
+
+    @EventHandler
     private void onAttack(AttackEntityEvent event) {
-        if (event.entity instanceof PlayerEntity player) {
-            lastTarget = player;
+        if (event.entity instanceof PlayerEntity p) {
+            lastTarget = p;
             lastAttackTime = System.currentTimeMillis();
         }
     }
 
     @EventHandler
-    @SuppressWarnings("unused")
-    private void onPacketReceive(PacketEvent.Receive event) {
-        if (mc.world == null || mc.player == null) return;
+    private void onMessage(ReceiveMessageEvent event) {
+        // --- MENTION FIX START ---
+        if (!mentionEnabled.get() || mc.player == null || mc.currentScreen instanceof ChatScreen) return;
 
-        if (event.packet instanceof EntityStatusS2CPacket packet) {
-            Entity entity = packet.getEntity(mc.world);
-
-            // Totem Pop (Status 35)
-            if (popEnabled.get() && packet.getStatus() == 35) {
-                if (entity instanceof PlayerEntity player) {
-                    if (player.equals(mc.player)) return;
-                    UUID uuid = player.getUuid();
-                    int count = popCounts.getOrDefault(uuid, 0) + 1;
-                    popCounts.put(uuid, count);
-                    addNotification(player.getName().getString() + " popped " + count + "!", Type.WARNING, Items.TOTEM_OF_UNDYING.getDefaultStack());
-                }
-            }
-
-            // Death (Status 3)
-            if (killFeed.get() && packet.getStatus() == 3) {
-                if (entity instanceof PlayerEntity player) {
-                    if (player.equals(mc.player)) {
-                        addNotification("You died.", Type.DANGER, Items.SKELETON_SKULL.getDefaultStack());
-                        popCounts.remove(mc.player.getUuid());
-                    }
-                    else if (lastTarget != null && player.equals(lastTarget) && System.currentTimeMillis() - lastAttackTime < 5000) {
-                        ItemStack weapon = mc.player.getMainHandStack().isEmpty() ? Items.NETHERITE_SWORD.getDefaultStack() : mc.player.getMainHandStack();
-                        addNotification("Killed " + player.getName().getString(), Type.DANGER, weapon);
-                        popCounts.remove(player.getUuid());
-                        lastTarget = null;
-                    }
-                }
-            }
-        }
-    }
-
-    @EventHandler
-    @SuppressWarnings("unused")
-    private void onEntityAdded(EntityAddedEvent event) {
-        if (!pearlEnabled.get() || mc.player == null) return;
-        if (event.entity instanceof EnderPearlEntity pearl) {
-            if (pearl.getOwner() instanceof PlayerEntity owner && !owner.equals(mc.player)) {
-                if (ignoreFriends.get() && Friends.get().isFriend(owner)) return;
-                addNotification("Pearl: " + owner.getName().getString(), Type.INFO, Items.ENDER_PEARL.getDefaultStack());
-            }
-        }
-    }
-
-    @EventHandler
-    @SuppressWarnings("unused")
-    private void onMessageReceive(ReceiveMessageEvent event) {
-        if (!mentionEnabled.get() || mc.player == null) return;
         String msg = event.getMessage().getString();
         String myName = mc.player.getName().getString();
 
-        if (!myName.isEmpty() && msg.toLowerCase().contains(myName.toLowerCase())) {
-            if (!msg.startsWith(myName) && !msg.startsWith("<" + myName)) {
-                addNotification("Mentioned in chat", Type.INFO, Items.PAPER.getDefaultStack());
+        // Safety check if name is empty
+        if (myName.isEmpty()) return;
+
+        // Check if message contains my name (case insensitive)
+        if (msg.toLowerCase().contains(myName.toLowerCase())) {
+
+            // IGNORE if message STARTS with my name (e.g. "[MyName] Hello")
+            // This covers standard chat formats like "<MyName> msg" or "MyName: msg"
+            if (msg.startsWith(myName) || msg.startsWith("<" + myName) || msg.startsWith("[" + myName)) {
+                return;
+            }
+
+            addNotification("Mentioned in Chat", Type.INFO, Items.PAPER.getDefaultStack());
+        }
+        // --- MENTION FIX END ---
+    }
+
+    @EventHandler
+    private void onEntityAdded(EntityAddedEvent event) {
+        if (pearlEnabled.get() && event.entity instanceof EnderPearlEntity pearl) {
+            if (pearl.getOwner() instanceof PlayerEntity p && !p.equals(mc.player) && !Friends.get().isFriend(p)) {
+                addNotification("Pearl: " + p.getName().getString(), Type.INFO, Items.ENDER_PEARL.getDefaultStack());
             }
         }
     }
 
-    // ================= RENDER =================
-
-    @Override
-    public void render(HudRenderer renderer) {
-        if (mc.world == null || mc.player == null) return;
-
-        updateVisualRange();
-        updateBurrow();
-
-        // Copy list to prevent concurrent modification and to allow adding preview safely
-        List<Notification> renderList = new ArrayList<>(notifications);
-
-        // FIXED: Inject Preview Notification if in Editor and list is empty
-        if (renderList.isEmpty() && isInEditor()) {
-            Notification preview = new Notification("Kooda Preview", Type.INFO, Items.NETHER_STAR.getDefaultStack());
-            // Force yOffset to 0 so it's fully visible immediately
-            preview.yOffset = 0;
-            renderList.add(preview);
-        }
-
-        if (renderList.isEmpty()) return;
-
-        double s = scale.get();
-        double h = (renderer.textHeight() + 8) * s;
-        double spacing = 2 * s;
-
-        boolean alignRight = getX() + (getWidth() / 2.0) > mc.getWindow().getScaledWidth() / 2.0;
-
-        double maxW = 0;
-        double targetY = 0;
-
-        List<Notification> toRemove = new ArrayList<>();
-
-        for (Notification n : renderList) {
-            long timeAlive = System.currentTimeMillis() - n.startTime;
-            double maxTime = displayTime.get() * 1000;
-
-            // FIXED: If in editor, force the notification to stay alive
-            if (isInEditor()) {
-                timeAlive = 0; // Tricks the renderer into showing it with full alpha
-            } else if (timeAlive > maxTime) {
-                toRemove.add(n);
-                continue;
-            }
-
-            n.yOffset = MathHelper.lerp(0.1, n.yOffset, targetY);
-
-            // Pass the modified timeAlive if needed, or rely on startTime adjustment
-            double w = renderNotificationInternal(renderer, n, s, alignRight);
-
-            if (w > maxW) maxW = w;
-            targetY += h + spacing;
-        }
-
-        // Only remove real notifications
-        notifications.removeAll(toRemove);
-
-        // Calculate size based on the rendered content (including preview)
-        if (maxW < 50) maxW = 50;
-        if (targetY < 10) targetY = 10;
-        setSize(maxW, targetY);
-    }
-
-    private double renderNotificationInternal(HudRenderer renderer, Notification n, double s, boolean alignRight) {
-        long timeAlive = System.currentTimeMillis() - n.startTime;
-
-        // FIXED: Override timeAlive logic for Editor Preview to prevent fading
-        if (isInEditor()) {
-            timeAlive = 100; // Constant low value ensures alpha is 1.0
-        }
-
-        double maxTime = displayTime.get() * 1000;
-        double fadeTime = 250;
-
-        double animAlpha = 1.0;
-        if (timeAlive < fadeTime) {
-            animAlpha = MathHelper.clamp((double)timeAlive / fadeTime, 0, 1);
-        } else if (timeAlive > maxTime - fadeTime) {
-            animAlpha = MathHelper.clamp((maxTime - timeAlive) / fadeTime, 0, 1);
-        }
-
-        return switch (style.get()) {
-            case Kooda -> renderKooda(renderer, n, s, alignRight, animAlpha, n.yOffset);
-            case CSGO -> renderCSGO(renderer, n, s, alignRight, animAlpha, n.yOffset);
-            case Cyber -> renderCyber(renderer, n, s, alignRight, animAlpha, n.yOffset);
-            case Minimal -> renderMinimal(renderer, n, s, alignRight, animAlpha, n.yOffset);
-            case Future -> renderFuture(renderer, n, s, alignRight, animAlpha, n.yOffset);
-            case Bubble -> renderBubble(renderer, n, s, alignRight, animAlpha, n.yOffset);
-            case Retro -> renderRetro(renderer, n, s, alignRight, animAlpha, n.yOffset);
-            default -> renderStandard(renderer, n, s, alignRight, animAlpha, n.yOffset);
-        };
-    }
-
-    // --- STYLES IMPLEMENTATION ---
-
-    private double renderKooda(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = n.text + (n.stackCount > 1 ? " x" + n.stackCount : "");
-        double textW = r.textWidth(text) * s;
-        double iconSize = 16 * s;
-        double padding = 5 * s;
-        double totalW = padding + iconSize + padding + textW + padding;
-
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-        double h = (r.textHeight() + 8) * s;
-
-        Color bg = new Color(15, 15, 15, (int)(220 * alpha));
-        Color accent = new Color(KoodaAddon.KOODA_COLOR.r, KoodaAddon.KOODA_COLOR.g, KoodaAddon.KOODA_COLOR.b, (int)(255 * alpha));
-        Color txt = colorText.get().copy();
-        txt.a = (int)(255 * alpha);
-
-        r.quad(drawX, drawY, totalW, h, bg);
-        r.quad(drawX, drawY, totalW, 2 * s, accent);
-        r.item(n.icon, (int)(drawX + padding), (int)(drawY + (h - iconSize) / 2 + (1 * s)), (float)s, true);
-        r.text(text, drawX + padding + iconSize + padding, drawY + (h / 2) - (r.textHeight() * s / 2) + (1 * s), txt, true, s);
-
-        return totalW;
-    }
-
-    private double renderCSGO(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = n.text + (n.stackCount > 1 ? " x" + n.stackCount : "");
-        double textW = r.textWidth(text) * s;
-        double iconSize = 16 * s;
-        double padding = 6 * s;
-        double totalW = padding + iconSize + padding + textW + padding + (4 * s);
-
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-        double h = (r.textHeight() + 8) * s;
-
-        Color bg = new Color(0, 0, 0, (int)(180 * alpha));
-        Color border = n.type.getColor(this);
-        border.a = (int)(255 * alpha);
-        Color txt = colorText.get().copy();
-        txt.a = (int)(255 * alpha);
-
-        r.quad(drawX, drawY, totalW, h, bg);
-        r.quad(drawX, drawY, 3 * s, h, border);
-        r.item(n.icon, (int)(drawX + (4 * s) + padding), (int)(drawY + (h - iconSize) / 2), (float)s, true);
-        r.text(text, drawX + (4 * s) + padding + iconSize + padding, drawY + (h / 2) - (r.textHeight() * s / 2), txt, true, s);
-
-        return totalW;
-    }
-
-    private double renderCyber(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = n.text.toUpperCase();
-        if (n.stackCount > 1) text += " [" + n.stackCount + "]";
-        double textW = r.textWidth(text) * s;
-        double totalW = (12 * s) + textW;
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-        double h = (r.textHeight() + 8) * s;
-
-        Color accent = n.type.getColor(this);
-        accent.a = (int)(255 * alpha);
-
-        r.quad(drawX, drawY, 2*s, h, accent);
-        r.quad(drawX, drawY, 6*s, 2*s, accent);
-        r.quad(drawX, drawY + h - 2*s, 6*s, 2*s, accent);
-
-        double rX = drawX + totalW;
-        r.quad(rX - 2*s, drawY, 2*s, h, accent);
-        r.quad(rX - 6*s, drawY, 6*s, 2*s, accent);
-        r.quad(rX - 6*s, drawY + h - 2*s, 6*s, 2*s, accent);
-
-        r.text(text, drawX + (6*s), drawY + (4*s), accent, true, s);
-        return totalW;
-    }
-
-    private double renderMinimal(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = n.text + (n.stackCount > 1 ? " (" + n.stackCount + ")" : "");
-        double textW = r.textWidth(text) * s;
-        double totalW = (10 * s) + textW;
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-        double h = (r.textHeight() + 6) * s;
-
-        Color bg = new Color(240, 240, 240, (int)(240 * alpha));
-        Color txt = new Color(20, 20, 20, (int)(255 * alpha));
-        Color shadow = new Color(0, 0, 0, (int)(80 * alpha));
-
-        r.quad(drawX + (2*s), drawY + (2*s), totalW, h, shadow);
-        r.quad(drawX, drawY, totalW, h, bg);
-
-        Color ind = n.type.getColor(this);
-        ind.a = (int)(255 * alpha);
-        r.quad(drawX, drawY + h - (1.5*s), totalW, 1.5*s, ind);
-
-        r.text(text, drawX + (5*s), drawY + (3*s), txt, false, s);
-        return totalW;
-    }
-
-    private double renderFuture(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = n.text.toUpperCase();
-        if (n.stackCount > 1) text += " [" + n.stackCount + "]";
-
-        double textW = r.textWidth(text) * s;
-        double padding = 6 * s;
-        double totalW = padding + textW + padding;
-        double h = (r.textHeight() + 8) * s;
-
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-
-        Color border = n.type.getColor(this);
-        border.a = (int)(255 * alpha);
-        Color bg = new Color(0, 0, 0, (int)(150 * alpha));
-
-        r.quad(drawX, drawY, totalW, h, bg);
-
-        double bSize = 1 * s;
-        r.quad(drawX, drawY, totalW, bSize, border);
-        r.quad(drawX, drawY + h - bSize, totalW, bSize, border);
-        r.quad(drawX, drawY, bSize, h, border);
-        r.quad(drawX + totalW - bSize, drawY, bSize, h, border);
-
-        r.text(text, drawX + padding, drawY + (h / 2) - (r.textHeight() * s / 2), border, true, s);
-        return totalW;
-    }
-
-    private double renderBubble(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = n.text + (n.stackCount > 1 ? " x" + n.stackCount : "");
-        double textW = r.textWidth(text) * s;
-        double iconSize = 14 * s;
-        double padding = 6 * s;
-        double totalW = padding + iconSize + padding + textW + padding;
-        double h = (r.textHeight() + 10) * s;
-
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-
-        Color bg = n.type.getColor(this);
-        bg.a = (int)(180 * alpha);
-        Color txt = new Color(255, 255, 255, (int)(255 * alpha));
-
-        r.quad(drawX + (2*s), drawY, totalW - (4*s), h, bg);
-        r.quad(drawX, drawY + (2*s), 2*s, h - (4*s), bg);
-        r.quad(drawX + totalW - (2*s), drawY + (2*s), 2*s, h - (4*s), bg);
-
-        r.item(n.icon, (int)(drawX + padding), (int)(drawY + (h - iconSize) / 2), (float)s, true);
-        r.text(text, drawX + padding + iconSize + padding, drawY + (h / 2) - (r.textHeight() * s / 2), txt, true, s);
-        return totalW;
-    }
-
-    private double renderRetro(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = "> " + n.text + (n.stackCount > 1 ? " (" + n.stackCount + ")" : "");
-        double textW = r.textWidth(text) * s;
-        double totalW = (8 * s) + textW + (8 * s);
-        double h = (r.textHeight() + 6) * s;
-
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-
-        Color fg = new Color(0, 255, 0, (int)(255 * alpha));
-        if (n.type == Type.DANGER) fg = new Color(255, 0, 0, (int)(255 * alpha));
-        if (n.type == Type.WARNING) fg = new Color(255, 165, 0, (int)(255 * alpha));
-
-        Color bg = new Color(0, 0, 0, (int)(240 * alpha));
-
-        r.quad(drawX, drawY, totalW, h, bg);
-        r.quad(drawX + (4*s), drawY + h - (2*s), totalW - (8*s), 1*s, fg);
-
-        r.text(text, drawX + (8*s), drawY + (3*s), fg, true, s);
-        return totalW;
-    }
-
-    private double renderStandard(HudRenderer r, Notification n, double s, boolean right, double alpha, double yOff) {
-        String text = n.text + (n.stackCount > 1 ? " x" + n.stackCount : "");
-        double textW = r.textWidth(text) * s;
-        double totalW = (8 * s) + textW;
-        double drawX = right ? (x + getWidth() - totalW) : x;
-        double drawY = y + yOff;
-        double h = (r.textHeight() + 8) * s;
-
-        Color bg = backgroundColor.get().copy();
-        bg.a = (int)(bg.a * alpha);
-        Color txt = colorText.get().copy();
-        txt.a = (int)(255 * alpha);
-
-        r.quad(drawX, drawY, totalW, h, bg);
-        r.text(text, drawX + (4*s), drawY + (4*s), txt, true, s);
-        return totalW;
-    }
-
-    // --- LOGIC ---
+    // ================= LOGIC HELPERS =================
 
     private void updateVisualRange() {
-        if (!vrEnabled.get() || mc.world == null) return;
-
-        List<AbstractClientPlayerEntity> playerList = mc.world.getPlayers();
-        Set<UUID> currentUUIDs = new HashSet<>();
-        for (AbstractClientPlayerEntity p : playerList) {
-            currentUUIDs.add(p.getUuid());
-        }
-
-        Iterator<Map.Entry<UUID, String>> it = knownPlayers.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<UUID, String> entry = it.next();
-            UUID uuid = entry.getKey();
-            String name = entry.getValue();
-
-            if (!currentUUIDs.contains(uuid)) {
-                if (vrLeave.get()) {
-                    addNotification("Left: " + name, Type.INFO, Items.SPYGLASS.getDefaultStack());
-                }
-                it.remove();
-            }
-        }
-
-        for (AbstractClientPlayerEntity p : playerList) {
-            if (shouldSkip(p)) continue;
+        for (AbstractClientPlayerEntity p : mc.world.getPlayers()) {
+            if (p.equals(mc.player) || Friends.get().isFriend(p)) continue;
             if (!knownPlayers.containsKey(p.getUuid())) {
-                if (vrEnter.get()) {
-                    addNotification("Entered: " + p.getName().getString(), Type.INFO, Items.SPYGLASS.getDefaultStack());
-                }
+                addNotification("Spotted: " + p.getName().getString(), Type.WARNING, Items.SPYGLASS.getDefaultStack());
                 knownPlayers.put(p.getUuid(), p.getName().getString());
             }
         }
     }
 
     private void updateBurrow() {
-        if (!burrowEnabled.get() || mc.world == null) return;
-
-        for (AbstractClientPlayerEntity player : mc.world.getPlayers()) {
-            if (shouldSkip(player)) continue;
-            BlockPos pos = player.getBlockPos();
-            Block block = mc.world.getBlockState(pos).getBlock();
-            boolean isBurrowBlock = block == Blocks.OBSIDIAN || block == Blocks.ENDER_CHEST || block == Blocks.BEDROCK || block == Blocks.ANVIL;
-
-            if (isBurrowBlock) {
-                if (!burrowedPlayers.contains(player.getUuid())) {
-                    addNotification("Burrow: " + player.getName().getString(), Type.WARNING, new ItemStack(block));
-                    burrowedPlayers.add(player.getUuid());
+        for (PlayerEntity p : mc.world.getPlayers()) {
+            if (p.equals(mc.player)) continue;
+            BlockPos pos = p.getBlockPos();
+            Block b = mc.world.getBlockState(pos).getBlock();
+            boolean trap = (b == Blocks.OBSIDIAN || b == Blocks.BEDROCK || b == Blocks.ENDER_CHEST);
+            if (trap) {
+                if (!burrowedPlayers.contains(p.getUuid())) {
+                    addNotification("Burrow: " + p.getName().getString(), Type.WARNING, new ItemStack(b));
+                    burrowedPlayers.add(p.getUuid());
                 }
-            } else {
-                burrowedPlayers.remove(player.getUuid());
-            }
+            } else burrowedPlayers.remove(p.getUuid());
         }
     }
 
-    private void addNotification(String text, Type type, ItemStack icon) {
+    public void addNotification(String text, Type type, ItemStack icon) {
+        // Chat Logger
+        if (logChat.get() && mc.player != null) {
+            Formatting fmt = switch (type) {
+                case WARNING -> Formatting.GOLD;
+                case DANGER -> Formatting.RED;
+                default -> Formatting.AQUA;
+            };
+            ChatUtils.sendMsg(Text.literal("[Kooda] " + text).formatted(fmt));
+        }
+
+        // Stacking Logic with Pulse
         if (!notifications.isEmpty()) {
-            Notification last = notifications.getFirst();
+            Notification last = notifications.get(0);
             if (last.text.equals(text) && last.type == type) {
-                last.stackCount++;
+                last.stack++;
                 last.startTime = System.currentTimeMillis();
+                last.pulseTimer = 1.0f; // Reset Pulse
+                playSound(last.stack);
                 return;
             }
         }
-        notifications.addFirst(new Notification(text, type, icon));
+        notifications.add(0, new Notification(text, type, icon));
+        playSound(1);
+    }
 
-        if (sounds.get()) {
-            if (customSound.get()) {
-                playExternalSound();
-            } else {
-                mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_TOAST_IN, 1.0f, 1.0f));
-            }
+    private void playSound(int stack) {
+        if (!sounds.get()) return;
+        float pitch = pitchScaling.get() ? MathHelper.clamp(1.0f + (stack - 1) * 0.1f, 0.5f, 2.0f) : 1.0f;
+        if (customSound.get() && cachedSoundFile.exists()) {
+            soundExecutor.submit(() -> {
+                try {
+                    AudioInputStream ais = AudioSystem.getAudioInputStream(cachedSoundFile);
+                    Clip clip = AudioSystem.getClip();
+                    clip.open(ais);
+                    if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN))
+                        ((FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN)).setValue(-5.0f);
+                    clip.start();
+                } catch (Exception e) {}
+            });
+        } else {
+            mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_TOAST_IN, pitch, 1.0f));
         }
     }
 
-    private void playExternalSound() {
-        soundExecutor.submit(() -> {
-            try {
-                if (cachedSoundFile != null && cachedSoundFile.exists()) {
-                    AudioInputStream audioIn = AudioSystem.getAudioInputStream(cachedSoundFile);
-                    Clip clip = AudioSystem.getClip();
-                    clip.open(audioIn);
+    // ================= RENDER ENGINE =================
 
-                    if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
-                        FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-                        gainControl.setValue(-5.0f);
-                    }
+    @Override
+    public void render(HudRenderer r) {
+        if (isInEditor()) {
+            Notification preview = new Notification("Kooda Preview", Type.WARNING, Items.NETHER_STAR.getDefaultStack());
+            double s = scale.get();
+            double w = measureWidth(r, preview, s);
+            double h = (r.textHeight() + 10) * s;
+            setSize(w, h);
+            renderInternal(r, preview, x, y, s);
+            return;
+        }
 
-                    clip.start();
-                    Thread.sleep(2000);
+        if (notifications.isEmpty()) { setSize(0, 0); return; }
 
-                    clip.close();
-                    audioIn.close();
-                } else {
-                    mc.execute(() -> mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_TOAST_IN, 1.0f, 1.0f)));
-                }
-            } catch (Exception e) {
-                mc.execute(() -> mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_TOAST_IN, 1.0f, 1.0f)));
+        double s = scale.get();
+        double h = (r.textHeight() + 10) * s;
+        double gap = 2 * s;
+        double maxW = 0;
+        double totalH = 0;
+
+        List<Notification> renderList = new ArrayList<>(notifications);
+        for (Notification n : renderList) {
+            // Update Pulse
+            if (n.pulseTimer > 0) n.pulseTimer = Math.max(0, n.pulseTimer - (r.delta * 5));
+
+            long elapsed = System.currentTimeMillis() - n.startTime;
+            double life = displayTime.get() * 1000;
+            if (elapsed > life) n.animProgress = MathHelper.clamp(1.0 - ((elapsed - life) / 500.0), 0, 1);
+            else n.animProgress = MathHelper.clamp(elapsed / 300.0, 0, 1);
+
+            n.ySmooth = MathHelper.lerp(0.2, n.ySmooth, totalH);
+            double w = measureWidth(r, n, s);
+            maxW = Math.max(maxW, w);
+            double animScale = (animType.get() == Animation.Scale) ? n.animProgress : 1.0;
+            totalH += (h + gap) * animScale;
+        }
+        setSize(maxW, Math.max(totalH, 10));
+
+        boolean alignRight = getX() + (getWidth() / 2) > mc.getWindow().getScaledWidth() / 2;
+        for (Notification n : renderList) {
+            if (n.animProgress <= 0.05) continue;
+            double w = measureWidth(r, n, s);
+            double xPos = alignRight ? (x + maxW - w) : x;
+            double xOff = 0;
+            if (animType.get() == Animation.Slide) {
+                double dist = w + 20;
+                xOff = alignRight ? dist * (1 - n.animProgress) : -dist * (1 - n.animProgress);
             }
-        });
+            renderInternal(r, n, xPos + xOff, y + n.ySmooth, s);
+        }
     }
 
-    private boolean shouldSkip(PlayerEntity player) {
-        if (player.equals(mc.player)) return true;
-        return ignoreFriends.get() && Friends.get().isFriend(player);
+    // --- COLOR LOGIC (FIXED) ---
+    private Color getColorFor(Notification n) {
+        if (chroma.get()) {
+            // FIXED: Manual Rainbow generation using Java AWT
+            float hue = (System.currentTimeMillis() % 2000) / 2000f;
+            int rgb = java.awt.Color.HSBtoRGB(hue, 1, 1);
+            return new Color((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, 255);
+        }
+        return n.type.getColor(this);
     }
 
-    // --- CLASSES ---
+    // --- HELPER: Manual Brighter Logic (FIXED) ---
+    private Color makeBrighter(Color c) {
+        int r = Math.min(255, (int)(c.r * 1.3));
+        int g = Math.min(255, (int)(c.g * 1.3));
+        int b = Math.min(255, (int)(c.b * 1.3));
+        return new Color(r, g, b, c.a);
+    }
+
+    private double measureWidth(HudRenderer r, Notification n, double s) {
+        String t = getFormattedText(n);
+        double txtW = r.textWidth(t) * s;
+        double icon = 16 * s;
+        return switch (style.get()) {
+            case Kooda -> (5*s) + icon + (5*s) + txtW + (5*s);
+            case CSGO -> (6*s) + icon + (6*s) + txtW + (10*s);
+            case Cyber, Future -> (12*s) + txtW + (12*s);
+            case Minimal -> (10*s) + txtW + (10*s);
+            case Bubble -> (6*s) + icon + (6*s) + txtW + (6*s);
+            case Retro -> (8*s) + txtW + (8*s);
+        };
+    }
+
+    private String getFormattedText(Notification n) {
+        String t = n.text;
+        int c = n.stack;
+        return switch (style.get()) {
+            case Cyber, Future -> (t + (c > 1 ? " [" + c + "]" : "")).toUpperCase();
+            case Retro -> "> " + t + (c > 1 ? " (" + c + ")" : "");
+            default -> t + (c > 1 ? " x" + c : "");
+        };
+    }
+
+    private void renderInternal(HudRenderer r, Notification n, double x, double y, double s) {
+        double pct;
+        if (isInEditor()) { pct = 1.0; n.animProgress = 1.0; }
+        else {
+            long elapsed = System.currentTimeMillis() - n.startTime;
+            pct = MathHelper.clamp(1.0 - (double)elapsed / (displayTime.get() * 1000), 0, 1);
+        }
+
+        switch (style.get()) {
+            case CSGO -> renderCSGO(r, n, x, y, s, n.animProgress, pct);
+            case Cyber -> renderCyber(r, n, x, y, s, n.animProgress, pct);
+            case Minimal -> renderMinimal(r, n, x, y, s, n.animProgress, pct);
+            case Future -> renderFuture(r, n, x, y, s, n.animProgress, pct);
+            case Bubble -> renderBubble(r, n, x, y, s, n.animProgress, pct);
+            case Retro -> renderRetro(r, n, x, y, s, n.animProgress, pct);
+            default -> renderKooda(r, n, x, y, s, n.animProgress, pct);
+        }
+    }
+
+    // --- RENDERERS (FIXED with makeBrighter) ---
+
+    private void renderKooda(HudRenderer r, Notification n, double x, double y, double s, double a, double pct) {
+        double w = measureWidth(r, n, s);
+        double h = (r.textHeight() + 8) * s;
+        Color bg = colorBg.get().copy(); bg.a = (int)(bg.a * a);
+        Color accent = getColorFor(n); accent.a = (int)(255 * a);
+        Color txt = colorText.get().copy(); txt.a = (int)(255 * a);
+
+        if (n.pulseTimer > 0) bg = makeBrighter(bg);
+
+        r.quad(x, y, w, h, bg);
+        r.quad(x, y, w, 2*s, accent);
+        r.item(n.icon, (int)(x + 5*s), (int)(y + (h - 16*s)/2), (float)s, true);
+        r.text(getFormattedText(n), x + 21*s + 5*s, y + h/2 - r.textHeight()*s/2, txt, true, s);
+        if (timeBar.get()) r.quad(x, y + h - 2*s, w * pct, 2*s, accent);
+    }
+
+    private void renderCSGO(HudRenderer r, Notification n, double x, double y, double s, double a, double pct) {
+        double w = measureWidth(r, n, s);
+        double h = (r.textHeight() + 10) * s;
+        Color bg = new Color(0,0,0, (int)(180*a));
+        Color border = getColorFor(n); border.a = (int)(255*a);
+        if (n.pulseTimer > 0) border = makeBrighter(border);
+
+        r.quad(x, y, w, h, bg);
+        r.quad(x, y, 3*s, h, border);
+        r.item(n.icon, (int)(x + 8*s), (int)(y + (h - 16*s)/2), (float)s, true);
+        r.text(getFormattedText(n), x + 28*s, y + h/2 - r.textHeight()*s/2, colorText.get(), true, s);
+        if (timeBar.get()) r.quad(x + 3*s, y + h - 1.5*s, (w - 3*s) * pct, 1.5*s, border);
+    }
+
+    private void renderCyber(HudRenderer r, Notification n, double x, double y, double s, double a, double pct) {
+        double w = measureWidth(r, n, s);
+        double h = (r.textHeight() + 8) * s;
+        Color accent = getColorFor(n); accent.a = (int)(255*a);
+        Color bg = new Color(0,0,0, (int)(120*a));
+        r.quad(x, y, 2*s, h, accent);
+        r.quad(x+w-2*s, y, 2*s, h, accent);
+        r.quad(x+2*s, y, w-4*s, h, bg);
+        r.text(getFormattedText(n), x + (w - r.textWidth(getFormattedText(n))*s)/2, y + h/2 - r.textHeight()*s/2, accent, true, s);
+        if (timeBar.get()) r.quad(x+2*s, y+h-2*s, (w-4*s)*pct, 1*s, accent);
+    }
+
+    private void renderMinimal(HudRenderer r, Notification n, double x, double y, double s, double a, double pct) {
+        double w = measureWidth(r, n, s);
+        double h = (r.textHeight() + 6) * s;
+        Color bg = new Color(245, 245, 245, (int)(240 * a));
+        Color txt = new Color(20, 20, 20, (int)(255 * a));
+        r.quad(x, y, w, h, bg);
+        r.text(getFormattedText(n), x + w/2 - (r.textWidth(getFormattedText(n))*s)/2, y + h/2 - r.textHeight()*s/2, txt, false, s);
+        Color bar = getColorFor(n); bar.a = (int)(255*a);
+        if (timeBar.get()) r.quad(x, y+h-2*s, w*pct, 2*s, bar);
+    }
+
+    private void renderFuture(HudRenderer r, Notification n, double x, double y, double s, double a, double pct) {
+        double w = measureWidth(r, n, s);
+        double h = (r.textHeight() + 10) * s;
+        Color c = getColorFor(n); c.a = (int)(255*a);
+        Color bg = new Color(0,0,0, (int)(150*a));
+        r.quad(x, y, w, h, bg);
+        r.quad(x, y, 1*s, h, c);
+        r.quad(x+w-1*s, y, 1*s, h, c);
+        r.quad(x, y, w, 1*s, c);
+        r.quad(x, y+h-1*s, w, 1*s, c);
+        r.text(getFormattedText(n), x + w/2 - r.textWidth(getFormattedText(n))*s/2, y + h/2 - r.textHeight()*s/2, c, true, s);
+    }
+
+    private void renderBubble(HudRenderer r, Notification n, double x, double y, double s, double a, double pct) {
+        double w = measureWidth(r, n, s);
+        double h = (r.textHeight() + 8) * s;
+        Color bg = getColorFor(n); bg.a = (int)(200*a);
+        r.quad(x + 2*s, y, w - 4*s, h, bg);
+        r.quad(x, y + 2*s, 2*s, h - 4*s, bg);
+        r.quad(x + w - 2*s, y + 2*s, 2*s, h - 4*s, bg);
+        r.item(n.icon, (int)(x + 5*s), (int)(y + (h - 16*s)/2), (float)s, true);
+        r.text(getFormattedText(n), x + 25*s, y + h/2 - r.textHeight()*s/2, new Color(255,255,255, (int)(255*a)), true, s);
+    }
+
+    private void renderRetro(HudRenderer r, Notification n, double x, double y, double s, double a, double pct) {
+        double w = measureWidth(r, n, s);
+        double h = (r.textHeight() + 6) * s;
+        Color c = getColorFor(n); c.a = (int)(255*a);
+        r.quad(x, y, w, h, new Color(0,0,0, (int)(240*a)));
+        r.text(getFormattedText(n), x + 4*s, y + h/2 - r.textHeight()*s/2, c, true, s);
+        if (timeBar.get()) r.quad(x, y+h-1*s, w*pct, 1*s, c);
+    }
 
     private static class Notification {
-        String text;
-        Type type;
-        ItemStack icon;
-        long startTime;
-        int stackCount = 1;
-        double yOffset = -20;
-
-        public Notification(String text, Type type, ItemStack icon) {
-            this.text = text;
-            this.type = type;
-            this.icon = icon;
-            this.startTime = System.currentTimeMillis();
+        String text; Type type; ItemStack icon;
+        long startTime; int stack = 1;
+        double animProgress = 0; double ySmooth = 0;
+        double pulseTimer = 0;
+        public Notification(String t, Type y, ItemStack i) {
+            text = t; type = y; icon = i; startTime = System.currentTimeMillis();
         }
-    }
-
-    public enum Style {
-        Kooda,
-        Standard,
-        CSGO,
-        Cyber,
-        Minimal,
-        Future,
-        Bubble,
-        Retro
     }
 
     public enum Type {
-        INFO,
-        WARNING,
-        DANGER;
-
-        public Color getColor(KoodaNotifierHud hud) {
-            return switch (this) {
-                case WARNING -> hud.colorWarn.get();
-                case DANGER -> hud.colorDanger.get();
-                default -> hud.colorInfo.get();
+        INFO, WARNING, DANGER;
+        public Color getColor(KoodaNotifierHud h) {
+            return switch(this) {
+                case INFO -> h.colorInfo.get();
+                case WARNING -> h.colorWarn.get();
+                case DANGER -> h.colorDanger.get();
             };
         }
     }
+
+    public enum Style { Kooda, CSGO, Cyber, Minimal, Future, Bubble, Retro }
+    public enum Animation { Slide, Fade, Scale }
 }

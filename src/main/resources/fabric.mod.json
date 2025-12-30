@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "id": "kooda-addon",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "name": "Kooda",
   "description": "Kooda Addon: Advanced utility and anarchy modules for Meteor Client.",
   "authors": [
     "TheOne"
   ],
   "contact": {
-    "repo": "https://github.com/koodadevs-creator/KoodaAddon-"
+    "repo": "https://github.com/tu-repositorio/Kooda"
   },
   "icon": "assets/icon/icon.png",
   "environment": "client",
