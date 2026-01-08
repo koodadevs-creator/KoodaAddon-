@@ -9,7 +9,6 @@ import java.util.List;
 
 @Mixin(InventoryS2CPacket.class)
 public interface InventoryS2CPacketAccessor {
-    // Accessing the private field 'contents' to check items before they crash the client
     @Accessor("contents")
     List<ItemStack> getContents();
 }

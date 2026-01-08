@@ -27,8 +27,6 @@ public class KeyBindHud extends HudElement {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgStyle = settings.createGroup("Style");
 
-    // -- General Settings --
-
     private final Setting<Double> scale = sgGeneral.add(new DoubleSetting.Builder()
             .name("scale")
             .description("The scale of the text.")
@@ -49,7 +47,7 @@ public class KeyBindHud extends HudElement {
     private final Setting<RenderMode> renderMode = sgGeneral.add(new EnumSetting.Builder<RenderMode>()
             .name("render-mode")
             .description("Compact removes spacing to create a joined list look.")
-            .defaultValue(RenderMode.Compact) // Default to Compact for the request
+            .defaultValue(RenderMode.Compact)
             .build()
     );
 
@@ -59,8 +57,6 @@ public class KeyBindHud extends HudElement {
             .defaultValue(LayoutMode.KeyFirst)
             .build()
     );
-
-    // -- Style Settings --
 
     private final Setting<Boolean> chroma = sgStyle.add(new BoolSetting.Builder()
             .name("chroma-text")
@@ -100,8 +96,6 @@ public class KeyBindHud extends HudElement {
             .build()
     );
 
-    // -- Background & Sidebar --
-
     private final Setting<Boolean> drawBackground = sgStyle.add(new BoolSetting.Builder()
             .name("background")
             .description("Draws a background behind the text.")
@@ -128,7 +122,7 @@ public class KeyBindHud extends HudElement {
     private final Setting<OutlineMode> outlineMode = sgStyle.add(new EnumSetting.Builder<OutlineMode>()
             .name("outline-mode")
             .description("Controls which sides of the outline are drawn.")
-            .defaultValue(OutlineMode.SidesOnly) // Fits the requested style |Module|
+            .defaultValue(OutlineMode.SidesOnly)
             .visible(drawOutline::get)
             .build()
     );
@@ -156,7 +150,6 @@ public class KeyBindHud extends HudElement {
             .build()
     );
 
-    // -- Internal List (Robustness: Reused to avoid allocation) --
     private final List<ModuleDisplayInfo> renderList = new ArrayList<>();
 
     public KeyBindHud() {
@@ -167,7 +160,6 @@ public class KeyBindHud extends HudElement {
     public void render(HudRenderer renderer) {
         renderList.clear();
 
-        // 1. Configuration & Constants
         boolean isCompact = renderMode.get() == RenderMode.Compact;
 
         double s = scale.get();
@@ -175,14 +167,11 @@ public class KeyBindHud extends HudElement {
         double paddingX = 4.0 * s;
         double sideBarWidth = 2.0 * s;
 
-        // In Compact mode, spacing is 0 to make them touch precisely
         double lineSpacing = isCompact ? 0.0 : (2.0 * s);
         double textHeight = renderer.textHeight() * s;
 
-        // Height calculation for robustness
         double rowHeight = isCompact ? (textHeight + (2 * s)) : (textHeight + 2);
 
-        // 2. Populate List
         for (Module module : Modules.get().getAll()) {
             if (module.keybind.isSet()) {
                 if (onlyActive.get() && !module.isActive()) continue;
@@ -209,38 +198,31 @@ public class KeyBindHud extends HudElement {
             return;
         }
 
-        // 3. Sort (Pyramid)
         renderList.sort(Comparator.comparingDouble(ModuleDisplayInfo::getTotalWidth).reversed());
 
-        // 4. Alignment
         boolean alignRight = getX() + (getWidth() / 2) > MinecraftClient.getInstance().getWindow().getScaledWidth() / 2.0;
         double maxTextWidth = renderList.get(0).getTotalWidth();
 
-        // 5. Render Loop
         double currentY = 0;
 
         for (int i = 0; i < renderList.size(); i++) {
             ModuleDisplayInfo info = renderList.get(i);
 
-            // X Calculations
             double drawX;
             double bgX;
             double barX;
             double sideBarOffset = sideBar.get() ? (sideBarWidth + 2) : 0;
 
             if (alignRight) {
-                // Right Align: Items stick to the right edge
                 drawX = x + (maxTextWidth - info.totalWidth) - sideBarOffset;
                 bgX = drawX - (paddingX / 2);
-                barX = x + maxTextWidth + (paddingX / 2); // Bar on far right
+                barX = x + maxTextWidth + (paddingX / 2);
             } else {
-                // Left Align: Items stick to the left edge
                 drawX = x + sideBarOffset;
                 bgX = drawX - (paddingX / 2);
-                barX = x; // Bar on far left
+                barX = x;
             }
 
-            // Colors
             Color nameColor;
             if (chroma.get()) {
                 nameColor = getChromaColor(i);
@@ -251,52 +233,36 @@ public class KeyBindHud extends HudElement {
             double itemHeight = rowHeight;
             double bgY = y + currentY;
 
-            // Draw Background
             if (drawBackground.get()) {
                 double bgWidth = info.totalWidth + paddingX;
 
-                // Draw Fill
                 renderer.quad(bgX, bgY, bgWidth, itemHeight, backgroundColor.get());
 
-                // Draw Outline (Robust Joined Logic)
                 if (drawOutline.get()) {
-                    double th = 1.0 * s; // Thickness
+                    double th = 1.0 * s;
                     Color outColor = outlineColor.get();
                     OutlineMode mode = outlineMode.get();
 
-                    // Sides
                     if (mode == OutlineMode.Full || mode == OutlineMode.SidesOnly) {
-                        renderer.quad(bgX, bgY, th, itemHeight, outColor); // Left
-                        renderer.quad(bgX + bgWidth - th, bgY, th, itemHeight, outColor); // Right
+                        renderer.quad(bgX, bgY, th, itemHeight, outColor);
+                        renderer.quad(bgX + bgWidth - th, bgY, th, itemHeight, outColor);
                     }
 
-                    // Top/Bottom
                     if (mode == OutlineMode.Full) {
-                        // In compact mode, avoid drawing double lines between items
-                        // Draw top only if it's the first item
                         if (!isCompact || i == 0) {
-                            renderer.quad(bgX, bgY, bgWidth, th, outColor); // Top
+                            renderer.quad(bgX, bgY, bgWidth, th, outColor);
                         }
-
-                        // Draw bottom always (it becomes the top of the next one in compact mode effectively,
-                        // but technically we usually draw bottom of current item).
-                        // If compact, we might want to skip bottom if there is a next item?
-                        // To keep it simple and robust: Draw bottom.
-                        renderer.quad(bgX, bgY + itemHeight - th, bgWidth, th, outColor); // Bottom
+                        renderer.quad(bgX, bgY + itemHeight - th, bgWidth, th, outColor);
                     }
                 }
             }
 
-            // Draw Sidebar
             if (sideBar.get()) {
                 Color barColor = chroma.get() ? getChromaColor(i) : sideBarColor.get();
-                // Height correction: Ensure they touch perfectly by using itemHeight (which includes 0 spacing in compact)
                 renderer.quad(barX, bgY, sideBarWidth, itemHeight, barColor);
             }
 
-            // Draw Text
-            // Vertically center text in the row
-            double textY = y + currentY + ((itemHeight - textHeight) / 2) - (s * 0.5); // Refined centering
+            double textY = y + currentY + ((itemHeight - textHeight) / 2) - (s * 0.5);
 
             if (layoutMode.get() == LayoutMode.KeyFirst) {
                 renderer.text(info.bind, drawX, textY, keybindColor.get(), true, s);
@@ -306,11 +272,9 @@ public class KeyBindHud extends HudElement {
                 renderer.text(info.bind, drawX + info.nameWidth + innerSpacing, textY, keybindColor.get(), true, s);
             }
 
-            // Increment Y
             currentY += itemHeight + lineSpacing;
         }
 
-        // 6. Set Size
         double totalWidth = maxTextWidth + paddingX + (sideBar.get() ? sideBarWidth + 2 : 0);
         if (totalWidth < 20) totalWidth = 20;
         if (currentY < 10) currentY = 10;

@@ -2,16 +2,20 @@
   "required": true,
   "package": "pwn.noobs.trouserstreak.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": [
+  "mixins": [
+    "MixinItemStack",
     "InventoryS2CPacketAccessor",
+    "MixinEntity",
+    "MixinPacketByteBuf"
+  ],
+  "client": [
     "MixinClientPlayNetworkHandler",
     "SplashOverlayMixin",
-    "MixinClientPlayerInteractionManager"
+    "MixinClientPlayerInteractionManager",
+    "KoodaTitleScreenMixin",
+    "MixinClientPlayerEntity"
   ],
   "injectors": {
     "defaultRequire": 1
-  },
-  "mixins": [
-    "MixinItemStack"
-  ]
+  }
 }
