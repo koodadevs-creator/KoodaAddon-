@@ -53,3 +53,8 @@ Lead Developer: TheOne
 Framework: Based on the Trouser-Streak addon structure.
 
 Note: This addon is intended for use on anarchy servers. Use it at your own responsibility.
+
+
+Join Oficial Kooda Discord:
+https://discord.gg/bFrw4Zqzyp
+
