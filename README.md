@@ -1,60 +1,59 @@
-Kooda Addon
-Kooda is a high-performance utility addon for Meteor Client, specifically designed to provide advanced visual tools and essential utilities for anarchy servers and competitive environments.
+# Kooda Addon
 
-🛠 Current Features
-👁️ Visuals & Rendering
-KoodaHoleESP: Highlights safe spots (Bedrock and Obsidian) in the ground for PvP.
+Kooda is a versatile utility addon for **Meteor Client 1.21.10**, designed to provide a mix of **combat tools, exploits, movement, utility, and visual enhancements**. It's a little bit of everything for players on **anarchy servers** or anyone looking for advanced features in competitive Minecraft.
 
-Color differentiation between indestructible and breakable holes.
+---
 
-"Ignore Own" option to prevent visual obstruction while standing inside a hole.
+## 🛠 Features
 
-Support for resistant blocks such as Anvils and Ender Chests.
+Kooda includes a wide variety of modules for **combat, movement, exploits, world manipulation, rendering, and utility**.  
+While this list does not cover every single module, the addon continues to be updated with new features and improvements.
 
-KoodaStorageESP: An advanced storage visualizer providing granular control over different containers.
-
-Specific tracers for Shulkers and Ender Chests originating from the crosshair.
-
-Visual alerts for Trapped Chests to avoid danger.
-
-Optimized rendering to maintain high FPS.
-
-📢 HUD & Notifications
-KoodaNotifierHud: A centralized notification system with smooth "slide-down" animations.
-
-Visual Range: Notifies when players enter or leave your render distance.
-
-Totem Pops: Tracks and displays the number of totems used by enemies.
-
-Combat Alerts: Detects pearl trajectories and players using Burrow.
-
-Chat Mentions: Highlights when someone mentions your name in the chat.
-
-🛡️ Utility & Security
-AntiBookBan: Critical protection against large packet exploits (BookBans).
-
-Configurable character limit (e.g., 50,000) to prevent being kicked by malicious books.
-
-🚀 Installation
-Ensure you have the latest version of Meteor Client installed.
-
-Download the Kooda .jar file.
-
-Place the file into your .minecraft/mods folder.
-
-Launch the game and access the modules via the Meteor GUI (Right Shift).
-
-🎨 Customization
-Kooda features a signature aesthetic based on Cyan (0, 255, 255). All HUD elements and rendering modules are highly configurable through the Meteor Client settings menu.
-
-👥 Credits
-Lead Developer: TheOne
-
-Framework: Based on the Trouser-Streak addon structure.
-
-Note: This addon is intended for use on anarchy servers. Use it at your own responsibility.
+**Examples of existing modules:**
+- Visual & Rendering: KoodaHoleESP, KoodaStorageESP
+- Combat: ToxicAura, SurroundPlus, KoodaSelfTrap, KoodaDoubleHand
+- Utility & Security: AntiBookBan, AntiLevitation
+- Misc & Fun: KoodaSoundFX
 
 
-Join Oficial Kooda Discord:
-https://discord.gg/bFrw4Zqzyp
+**HUD & Notifications:**
+- KoodaNotifierHud, Visual Range, Combat Info, RealTimeClock, BitCoinHud, ClientSpooferHud, and more.
 
+> ⚠️ Note: Some new modules may not be listed here yet, but they are included in the latest release.
+
+---
+
+## 🚀 Installation
+
+1. Make sure you have the latest **Meteor Client** installed.
+2. Download the **Kooda `.jar` file**.
+3. Place it into your `.minecraft/mods` folder.
+4. Launch Minecraft and access the modules via the **Meteor Client GUI (Right Shift)**.
+
+---
+
+## 🎨 Customization
+
+Kooda uses a signature **Cyan (0, 255, 255)** aesthetic.  
+All HUD elements and rendering modules are **fully configurable** through Meteor Client settings.
+
+---
+
+## 👥 Credits
+
+- **Lead Developer:** TheOne  
+- **Special Thanks:**  
+  - Saturnus25 (logo idea)  
+  - VicoreAddon (module inspiration)  
+- **Framework:** Based on the Trouser-Streak addon structure  
+
+---
+
+## 📢 Community
+
+Join the official Kooda Discord for **support, updates, and community interaction**:  
+[https://discord.gg/bFrw4Zqzyp](https://discord.gg/bFrw4Zqzyp)
+
+---
+
+> ⚠️ This addon is intended for use on anarchy servers. Use responsibly.
