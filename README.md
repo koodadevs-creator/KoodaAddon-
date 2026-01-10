@@ -11,13 +11,13 @@ While this list does not cover every single module, the addon continues to be up
 
 **Examples of existing modules:**
 - Visual & Rendering: KoodaHoleESP, KoodaStorageESP
-- Combat: ToxicAura, SurroundPlus, KoodaSelfTrap, KoodaDoubleHand
+- Combat: ToxicAura, SurroundPlus, KoodaSelfTrap
 - Utility & Security: AntiBookBan, AntiLevitation
 - Misc & Fun: KoodaSoundFX
 
 
 **HUD & Notifications:**
-- KoodaNotifierHud, Visual Range, Combat Info, RealTimeClock, BitCoinHud, ClientSpooferHud, and more.
+- KoodaNotifierHud, Visual Range, Combat Info, and more.
 
 > ⚠️ Note: Some new modules may not be listed here yet, but they are included in the latest release.
 
