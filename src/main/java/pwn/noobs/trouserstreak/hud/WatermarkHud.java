@@ -20,53 +20,75 @@ public class WatermarkHud extends HudElement {
             KoodaAddon.KOODA_HUD_GROUP,
             "kooda-watermark",
             "Kooda Watermark",
-            "Advanced watermark with dynamic placeholders and chroma.",
+            "Advanced watermark with dynamic icons and stats.",
             WatermarkHud::new
     );
 
-    // --- RESOURCES ---
-    private static final Identifier LOGO_TEXTURE = Identifier.of("kooda", "logo.png");
+    public enum IconMode {
+        Open,
+        Closed
+    }
+
+    private static final Identifier ICON_OPEN = Identifier.of("kooda", "logo.png");
+    private static final Identifier ICON_CLOSED = Identifier.of("kooda", "logo2.png");
     private static final int BASE_LOGO_SIZE = 64;
 
-    // --- SETTINGS ---
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgText = settings.createGroup("Text");
     private final SettingGroup sgStyle = settings.createGroup("Style");
-
-    // -- Content Settings --
+    private final SettingGroup sgBackground = settings.createGroup("Background");
 
     private final Setting<Boolean> showLogo = sgGeneral.add(new BoolSetting.Builder()
-            .name("show-logo")
-            .description("Displays the Kooda logo image.")
+            .name("show-icon")
+            .description("Displays the Kooda icon.")
             .defaultValue(true)
             .build()
     );
 
-    private final Setting<Double> logoScale = sgGeneral.add(new DoubleSetting.Builder()
-            .name("logo-scale")
-            .description("Scale of the logo image.")
-            .defaultValue(1.0)
-            .min(0.1)
-            .sliderMax(5.0)
+    private final Setting<IconMode> iconMode = sgGeneral.add(new EnumSetting.Builder<IconMode>()
+            .name("icon-variant")
+            .description("Select which icon to display.")
+            .defaultValue(IconMode.Open)
             .visible(showLogo::get)
             .build()
     );
 
-    private final Setting<Boolean> showText = sgGeneral.add(new BoolSetting.Builder()
+    private final Setting<Double> logoScale = sgGeneral.add(new DoubleSetting.Builder()
+            .name("icon-scale")
+            .description("Scale of the icon image.")
+            .defaultValue(0.8)
+            .min(0.1)
+            .sliderMax(3.0)
+            .visible(showLogo::get)
+            .build()
+    );
+
+    private final Setting<Boolean> showText = sgText.add(new BoolSetting.Builder()
             .name("show-text")
-            .description("Displays the watermark text.")
+            .description("Displays the watermark text info.")
             .defaultValue(true)
             .build()
     );
 
-    private final Setting<String> format = sgGeneral.add(new StringSetting.Builder()
-            .name("text-format")
-            .description("Text to display. Supports {fps}, {ping}, {tps}, {name}, {time}.")
-            .defaultValue("Kooda Client | {fps} FPS | {ping}ms")
+    private final Setting<Integer> spacing = sgGeneral.add(new IntSetting.Builder()
+            .name("spacing")
+            .description("Space between the logo and the text.")
+            .defaultValue(6)
+            .min(0)
+            .sliderMax(20)
+            .visible(() -> showLogo.get() && showText.get())
+            .build()
+    );
+
+    private final Setting<String> format = sgText.add(new StringSetting.Builder()
+            .name("format")
+            .description("Variables: {fps}, {ping}, {tps}, {name}, {time}, {server}, {coords}")
+            .defaultValue("Kooda | {fps} FPS | {ping}ms")
             .visible(showText::get)
             .build()
     );
 
-    private final Setting<Double> textScale = sgGeneral.add(new DoubleSetting.Builder()
+    private final Setting<Double> textScale = sgText.add(new DoubleSetting.Builder()
             .name("text-scale")
             .description("Scale of the text.")
             .defaultValue(1.0)
@@ -76,32 +98,18 @@ public class WatermarkHud extends HudElement {
             .build()
     );
 
-    // -- Layout Settings --
-
-    private final Setting<Integer> spacing = sgGeneral.add(new IntSetting.Builder()
-            .name("spacing")
-            .description("Space between the logo and the text.")
-            .defaultValue(10)
-            .min(0)
-            .sliderMax(50)
-            .visible(() -> showLogo.get() && showText.get())
-            .build()
-    );
-
-    private final Setting<Double> textOffsetY = sgGeneral.add(new DoubleSetting.Builder()
+    private final Setting<Double> textOffsetY = sgText.add(new DoubleSetting.Builder()
             .name("text-offset-y")
             .description("Vertical offset to align text with the logo.")
-            .defaultValue(0.0)
-            .min(-20.0)
-            .sliderMax(20.0)
+            .defaultValue(-1.0)
+            .min(-10.0)
+            .sliderMax(10.0)
             .visible(showText::get)
             .build()
     );
 
-    // -- Style Settings --
-
     private final Setting<Boolean> chroma = sgStyle.add(new BoolSetting.Builder()
-            .name("chroma")
+            .name("chroma-text")
             .description("Applies a rainbow effect to the text.")
             .defaultValue(false)
             .visible(showText::get)
@@ -124,18 +132,34 @@ public class WatermarkHud extends HudElement {
             .build()
     );
 
-    private final Setting<Boolean> drawBackground = sgStyle.add(new BoolSetting.Builder()
+    private final Setting<Boolean> drawBackground = sgBackground.add(new BoolSetting.Builder()
             .name("background")
-            .description("Draws a background box behind the watermark.")
+            .description("Draws a background box.")
             .defaultValue(true)
             .build()
     );
 
-    private final Setting<SettingColor> backgroundColor = sgStyle.add(new ColorSetting.Builder()
-            .name("background-color")
+    private final Setting<SettingColor> backgroundColor = sgBackground.add(new ColorSetting.Builder()
+            .name("bg-color")
             .description("Color of the background.")
-            .defaultValue(new SettingColor(20, 20, 20, 100))
+            .defaultValue(new SettingColor(20, 20, 20, 150))
             .visible(drawBackground::get)
+            .build()
+    );
+
+    private final Setting<Boolean> border = sgBackground.add(new BoolSetting.Builder()
+            .name("border")
+            .description("Draws a border around the hud.")
+            .defaultValue(true)
+            .visible(drawBackground::get)
+            .build()
+    );
+
+    private final Setting<SettingColor> borderColor = sgBackground.add(new ColorSetting.Builder()
+            .name("border-color")
+            .description("Color of the border.")
+            .defaultValue(new SettingColor(KoodaAddon.KOODA_COLOR.r, KoodaAddon.KOODA_COLOR.g, KoodaAddon.KOODA_COLOR.b, 255))
+            .visible(() -> drawBackground.get() && border.get())
             .build()
     );
 
@@ -146,58 +170,59 @@ public class WatermarkHud extends HudElement {
     @Override
     public void render(HudRenderer renderer) {
         if (!showLogo.get() && !showText.get()) {
-            // Invisible box to allow selection in editor if everything is hidden
             setSize(10, 10);
             return;
         }
 
-        // 1. CALCULATE CONTENT
         double realLogoSize = showLogo.get() ? (BASE_LOGO_SIZE * logoScale.get()) : 0;
 
-        // Dynamic Text generation
         String displayText = getFormattedText();
+        double txtW = 0;
+        double txtH = 0;
 
-        // Calculate text dimensions considering the custom scale
-        double textW = showText.get() ? renderer.textWidth(displayText) * textScale.get() : 0;
-        double textH = showText.get() ? renderer.textHeight() * textScale.get() : 0;
-
-        // 2. CALCULATE HUD SIZE
-        double contentWidth = 0;
-        if (showLogo.get()) contentWidth += realLogoSize;
-        if (showText.get()) contentWidth += textW;
-        if (showLogo.get() && showText.get()) contentWidth += spacing.get();
-
-        double contentHeight = Math.max(realLogoSize, textH);
-
-        // Add padding for the background
-        double padding = 4.0;
-        double totalWidth = contentWidth + (padding * 2);
-        double totalHeight = contentHeight + (padding * 2);
-
-        setSize(totalWidth, totalHeight);
-
-        // 3. RENDER BACKGROUND
-        if (drawBackground.get()) {
-            renderer.quad(x, y, totalWidth, totalHeight, backgroundColor.get());
-        }
-
-        // 4. RENDER ELEMENTS
-        double currentX = x + padding;
-        double centerY = y + (totalHeight / 2);
-
-        // Draw Logo
-        if (showLogo.get()) {
-            double logoY = centerY - (realLogoSize / 2);
-            renderer.texture(LOGO_TEXTURE, currentX, logoY, realLogoSize, realLogoSize, Color.WHITE);
-            currentX += realLogoSize + spacing.get();
-        }
-
-        // Draw Text
         if (showText.get()) {
-            double textY = centerY - (textH / 2) + textOffsetY.get();
+            txtW = renderer.textWidth(displayText) * textScale.get();
+            txtH = renderer.textHeight() * textScale.get();
+        }
 
+        double gap = (showLogo.get() && showText.get()) ? spacing.get() : 0;
+
+        double contentWidth = realLogoSize + gap + txtW;
+        double contentHeight = Math.max(realLogoSize, txtH);
+
+        double padX = 4.0;
+        double padY = 4.0;
+
+        double totalW = contentWidth + (padX * 2);
+        double totalH = contentHeight + (padY * 2);
+
+        setSize(totalW, totalH);
+
+        if (drawBackground.get()) {
+            renderer.quad(x, y, totalW, totalH, backgroundColor.get());
+
+            if (border.get()) {
+                Color bc = borderColor.get();
+                renderer.quad(x, y, totalW, 1, bc);
+                renderer.quad(x, y + totalH - 1, totalW, 1, bc);
+                renderer.quad(x, y, 1, totalH, bc);
+                renderer.quad(x + totalW - 1, y, 1, totalH, bc);
+            }
+        }
+
+        double currentX = x + padX;
+        double centerY = y + (totalH / 2);
+
+        if (showLogo.get()) {
+            double iconY = centerY - (realLogoSize / 2);
+            Identifier currentTexture = (iconMode.get() == IconMode.Closed) ? ICON_CLOSED : ICON_OPEN;
+            renderer.texture(currentTexture, currentX, iconY, realLogoSize, realLogoSize, Color.WHITE);
+            currentX += realLogoSize + gap;
+        }
+
+        if (showText.get()) {
+            double textY = centerY - (txtH / 2) + textOffsetY.get();
             Color finalColor = chroma.get() ? getChromaColor() : textColor.get();
-
             renderer.text(displayText, currentX, textY, finalColor, true, textScale.get());
         }
     }
@@ -207,34 +232,22 @@ public class WatermarkHud extends HudElement {
 
         String txt = format.get();
         MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null) return "Loading...";
 
-        // Replace {fps}
-        if (txt.contains("{fps}")) {
-            txt = txt.replace("{fps}", String.valueOf(mc.getCurrentFps()));
+        if (txt.contains("{fps}")) txt = txt.replace("{fps}", String.valueOf(mc.getCurrentFps()));
+        if (txt.contains("{ping}")) txt = txt.replace("{ping}", String.valueOf(PlayerUtils.getPing()));
+        if (txt.contains("{tps}")) txt = txt.replace("{tps}", String.format("%.1f", TickRate.INSTANCE.getTickRate()));
+        if (txt.contains("{name}")) txt = txt.replace("{name}", mc.player.getName().getString());
+        if (txt.contains("{time}")) txt = txt.replace("{time}", LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
+
+        if (txt.contains("{server}")) {
+            String server = mc.getCurrentServerEntry() != null ? mc.getCurrentServerEntry().address : "Singleplayer";
+            txt = txt.replace("{server}", server);
         }
 
-        // Replace {ping}
-        if (txt.contains("{ping}")) {
-            int ping = PlayerUtils.getPing();
-            txt = txt.replace("{ping}", String.valueOf(ping));
-        }
-
-        // Replace {tps}
-        if (txt.contains("{tps}")) {
-            String tps = String.format("%.1f", TickRate.INSTANCE.getTickRate());
-            txt = txt.replace("{tps}", tps);
-        }
-
-        // Replace {name}
-        if (txt.contains("{name}")) {
-            String name = mc.player != null ? mc.player.getName().getString() : "Player";
-            txt = txt.replace("{name}", name);
-        }
-
-        // Replace {time}
-        if (txt.contains("{time}")) {
-            String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
-            txt = txt.replace("{time}", time);
+        if (txt.contains("{coords}")) {
+            String coords = String.format("%d, %d, %d", (int)mc.player.getX(), (int)mc.player.getY(), (int)mc.player.getZ());
+            txt = txt.replace("{coords}", coords);
         }
 
         return txt;

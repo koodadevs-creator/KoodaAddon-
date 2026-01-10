@@ -1,171 +1,186 @@
 package pwn.noobs.trouserstreak.modules;
 
 import pwn.noobs.trouserstreak.KoodaAddon;
+import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.utils.player.Rotations;
+import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 public class KoodaHoleSnap extends Module {
-    private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    public enum Mode {
+        Instant,
+        Vector,
+        Legit
+    }
 
-    // --- SETTINGS ---
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgRender = settings.createGroup("Render");
+
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
             .name("mode")
-            .description("Movement method. Use Legit for Grim/NCP.")
-            .defaultValue(Mode.Legit)
+            .description("Movement calculation method.")
+            .defaultValue(Mode.Vector)
             .build()
     );
 
     private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
             .name("range")
-            .description("The radius to search for holes.")
-            .defaultValue(3.0)
+            .description("Radius to search for holes.")
+            .defaultValue(4.5)
             .min(1.0)
-            .sliderMax(5.0)
+            .sliderMax(6.0)
             .build()
     );
 
     private final Setting<Double> speed = sgGeneral.add(new DoubleSetting.Builder()
             .name("speed")
-            .description("Pull strength (Only for Rage mode).")
-            .defaultValue(1.0)
+            .description("Movement speed factor.")
+            .defaultValue(1.5)
             .min(0.1)
             .max(5.0)
-            .visible(() -> mode.get() == Mode.Rage)
+            .visible(() -> mode.get() != Mode.Legit)
             .build()
     );
 
-    // Removed Timer setting as mc.timer is inaccessible in 1.21 without Mixins
-    // This ensures the module compiles and runs without crashing.
-
-    private final Setting<Boolean> anchor = sgGeneral.add(new BoolSetting.Builder()
-            .name("anchor")
-            .description("Stops all movement when exactly over a hole to fall in perfectly.")
+    private final Setting<Boolean> autoDisable = sgGeneral.add(new BoolSetting.Builder()
+            .name("auto-disable")
+            .description("Disables the module when you are safely in a hole.")
             .defaultValue(true)
             .build()
     );
 
+    private final Setting<Boolean> render = sgRender.add(new BoolSetting.Builder()
+            .name("render")
+            .description("Renders the target hole.")
+            .defaultValue(true)
+            .build()
+    );
+
+    private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
+            .name("shape-mode")
+            .description("How the shape is rendered.")
+            .defaultValue(ShapeMode.Both)
+            .visible(render::get)
+            .build()
+    );
+
+    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+            .name("side-color")
+            .description("The side color.")
+            .defaultValue(new SettingColor(KoodaAddon.KOODA_COLOR.r, KoodaAddon.KOODA_COLOR.g, KoodaAddon.KOODA_COLOR.b, 25))
+            .visible(render::get)
+            .build()
+    );
+
+    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+            .name("line-color")
+            .description("The line color.")
+            .defaultValue(new SettingColor(KoodaAddon.KOODA_COLOR.r, KoodaAddon.KOODA_COLOR.g, KoodaAddon.KOODA_COLOR.b, 200))
+            .visible(render::get)
+            .build()
+    );
+
+    private BlockPos currentTarget;
+
     public KoodaHoleSnap() {
-        super(KoodaAddon.KOODA_MOVEMENT, "kooda-hole-snap", "Magnetically pulls you into safe holes.");
+        super(KoodaAddon.KOODA_MOVEMENT, "kooda-hole-snap", "Robust hole magnet system.");
+    }
+
+    @Override
+    public void onActivate() {
+        currentTarget = null;
+    }
+
+    @Override
+    public void onDeactivate() {
+        currentTarget = null;
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null) return;
 
-        // ROBUSTNESS FIX: Using isGliding() instead of isFallFlying() for 1.21 compatibility
-        if (mc.player.isUsingItem() || mc.player.isGliding() || mc.player.isClimbing()) return;
+        if (mc.player.isUsingItem() || mc.player.isGliding() || mc.player.isClimbing()) {
+            return;
+        }
 
-        // If in hole, optionally anchor and return
         if (isInHole()) {
-            if (anchor.get() && mc.player.isOnGround()) {
-                centerPlayer();
+            mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
+
+            Vec3d center = Vec3d.ofBottomCenter(mc.player.getBlockPos());
+            double distX = center.x - mc.player.getX();
+            double distZ = center.z - mc.player.getZ();
+
+            if (Math.sqrt(distX * distX + distZ * distZ) > 0.1) {
+                mc.player.addVelocity(distX * 0.2, 0, distZ * 0.2);
+            }
+
+            if (autoDisable.get()) {
+                toggle();
             }
             return;
         }
 
-        BlockPos targetHole = findHole();
+        currentTarget = findHole();
 
-        if (targetHole != null) {
-            Vec3d center = Vec3d.ofBottomCenter(targetHole);
+        if (currentTarget != null) {
+            Vec3d targetVec = Vec3d.ofBottomCenter(currentTarget);
+            double yawRad = Math.atan2(targetVec.z - mc.player.getZ(), targetVec.x - mc.player.getX());
+            double dist = Math.sqrt(mc.player.squaredDistanceTo(targetVec.x, mc.player.getY(), targetVec.z));
 
-            // ROBUSTNESS FIX: Manually constructing Vec3d since getPos() can be ambiguous in some mappings
-            Vec3d playerPos = new Vec3d(mc.player.getX(), mc.player.getY(), mc.player.getZ());
-            double distToCenter = playerPos.distanceTo(new Vec3d(center.x, mc.player.getY(), center.z));
+            if (mode.get() == Mode.Instant) {
+                double moveSpeed = Math.min(dist, speed.get());
+                mc.player.setVelocity(Math.cos(yawRad) * moveSpeed, mc.player.getVelocity().y, Math.sin(yawRad) * moveSpeed);
+            } else if (mode.get() == Mode.Vector) {
+                double speedVal = speed.get();
+                if (mc.player.isOnGround()) speedVal *= 0.5;
+                mc.player.addVelocity(Math.cos(yawRad) * speedVal * 0.1, 0, Math.sin(yawRad) * speedVal * 0.1);
+            } else if (mode.get() == Mode.Legit) {
+                float yaw = (float) Math.toDegrees(yawRad) - 90;
+                Rotations.rotate(yaw, mc.player.getPitch());
 
-            // LOGIC SPLIT BASED ON MODE
-            if (mode.get() == Mode.Rage) {
-                handleRageMode(center, distToCenter);
-            } else {
-                handleLegitMode(center, distToCenter);
+                if (!mc.player.isOnGround()) {
+                    double legitSpeed = 0.05;
+                    mc.player.addVelocity(Math.cos(yawRad) * legitSpeed, 0, Math.sin(yawRad) * legitSpeed);
+                }
             }
         }
     }
 
-    // --- MODES LOGIC ---
-
-    private void handleRageMode(Vec3d center, double dist) {
-        double x = center.x - mc.player.getX();
-        double z = center.z - mc.player.getZ();
-        double yaw = Math.atan2(z, x);
-
-        // Raw Velocity Set (Fast but Detectable)
-        double finalSpeed = Math.min(dist, speed.get());
-        double moveX = Math.cos(yaw) * finalSpeed;
-        double moveZ = Math.sin(yaw) * finalSpeed;
-
-        mc.player.setVelocity(moveX, mc.player.getVelocity().y, moveZ);
-    }
-
-    private void handleLegitMode(Vec3d center, double dist) {
-        // GRIM/NCP STRATEGY:
-        // 1. Only modify motion significantly if in Air (AirStrafe).
-        // 2. Use "Anchor" logic heavily (Stop X/Z motion when close to align).
-
-        // If we are VERY close to the hole (horizontally), kill velocity to drop in
-        if (dist < 0.3) {
-            mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
-
-            // Nudge slightly to perfect center
-            double nudgeX = (center.x - mc.player.getX()) * 0.5;
-            double nudgeZ = (center.z - mc.player.getZ()) * 0.5;
-
-            // Adding velocity is safer than setting it on Grim
-            mc.player.addVelocity(nudgeX, 0, nudgeZ);
-        }
-        // If we are farther and IN THE AIR, guide towards hole
-        else if (!mc.player.isOnGround()) {
-            double x = center.x - mc.player.getX();
-            double z = center.z - mc.player.getZ();
-            double yaw = Math.atan2(z, x);
-
-            // Very subtle pull (Air Strafe)
-            double strafeSpeed = 0.05; // Low value for bypass
-            double moveX = Math.cos(yaw) * strafeSpeed;
-            double moveZ = Math.sin(yaw) * strafeSpeed;
-
-            mc.player.addVelocity(moveX, 0, moveZ);
-        }
-    }
-
-    // --- UTILS ---
-
-    private void centerPlayer() {
-        // Stops momentum to prevent walking out of hole
-        mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
-    }
-
-    @Override
-    public void onDeactivate() {
-        // Timer reset logic removed for stability
+    @EventHandler
+    private void onRender(Render3DEvent event) {
+        if (!render.get() || currentTarget == null) return;
+        event.renderer.box(currentTarget, sideColor.get(), lineColor.get(), shapeMode.get(), 0);
     }
 
     private BlockPos findHole() {
         BlockPos playerPos = mc.player.getBlockPos();
         BlockPos bestHole = null;
-        double closestDist = Double.MAX_VALUE;
+        double closest = Double.MAX_VALUE;
         int r = (int) Math.ceil(range.get());
 
         for (int x = -r; x <= r; x++) {
             for (int z = -r; z <= r; z++) {
-                for (int y = -1; y <= 0; y++) {
+                for (int y = -2; y <= 1; y++) {
                     BlockPos pos = playerPos.add(x, y, z);
-                    if (!mc.world.getBlockState(pos).isAir()) continue;
 
-                    if (isValidHole(pos)) {
-                        // ROBUSTNESS FIX: Manual position construction
-                        Vec3d holeVec = Vec3d.ofBottomCenter(pos);
-                        // Squared distance check
-                        double dist = new Vec3d(mc.player.getX(), mc.player.getY(), mc.player.getZ())
-                                .squaredDistanceTo(holeVec);
+                    if (mc.world.getBlockState(pos).isAir() &&
+                            mc.world.getBlockState(pos.up()).isAir() &&
+                            mc.world.getBlockState(pos.up(2)).isAir()) {
 
-                        if (dist < closestDist && dist <= range.get() * range.get()) {
-                            closestDist = dist;
-                            bestHole = pos;
+                        if (isSafe(pos)) {
+                            double dist = mc.player.squaredDistanceTo(Vec3d.ofBottomCenter(pos));
+                            if (dist < closest && dist <= range.get() * range.get()) {
+                                closest = dist;
+                                bestHole = pos;
+                            }
                         }
                     }
                 }
@@ -174,26 +189,28 @@ public class KoodaHoleSnap extends Module {
         return bestHole;
     }
 
-    private boolean isValidHole(BlockPos pos) {
-        if (!isBlastResistant(pos.down())) return false;
-        return isBlastResistant(pos.north()) &&
+    private boolean isInHole() {
+        return isSafe(mc.player.getBlockPos());
+    }
+
+    private boolean isSafe(BlockPos pos) {
+        return isBlastResistant(pos.down()) &&
+                isBlastResistant(pos.north()) &&
                 isBlastResistant(pos.south()) &&
                 isBlastResistant(pos.east()) &&
                 isBlastResistant(pos.west());
     }
 
-    private boolean isInHole() {
-        return isValidHole(mc.player.getBlockPos());
-    }
-
     private boolean isBlastResistant(BlockPos pos) {
         if (mc.world == null) return false;
         var block = mc.world.getBlockState(pos).getBlock();
-        return block == Blocks.OBSIDIAN || block == Blocks.BEDROCK || block == Blocks.CRYING_OBSIDIAN || block == Blocks.ENDER_CHEST;
-    }
-
-    public enum Mode {
-        Rage,
-        Legit
+        return block == Blocks.OBSIDIAN ||
+                block == Blocks.BEDROCK ||
+                block == Blocks.CRYING_OBSIDIAN ||
+                block == Blocks.ENDER_CHEST ||
+                block == Blocks.NETHERITE_BLOCK ||
+                block == Blocks.ANVIL ||
+                block == Blocks.CHIPPED_ANVIL ||
+                block == Blocks.DAMAGED_ANVIL;
     }
 }

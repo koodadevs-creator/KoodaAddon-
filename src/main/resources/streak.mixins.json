@@ -13,7 +13,8 @@
     "SplashOverlayMixin",
     "MixinClientPlayerInteractionManager",
     "KoodaTitleScreenMixin",
-    "MixinClientPlayerEntity"
+    "MixinClientPlayerEntity",
+    "MixinMinecraftClient"
   ],
   "injectors": {
     "defaultRequire": 1
