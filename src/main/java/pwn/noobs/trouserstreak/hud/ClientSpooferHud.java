@@ -23,7 +23,7 @@ public class ClientSpooferHud extends HudElement {
         Konas
     }
 
-    // Vicore eliminado de aquí
+
     private static final Identifier BOZE = Identifier.of("kooda", "textures/spoof/boze.png");
     private static final Identifier FUTURE = Identifier.of("kooda", "textures/spoof/future.png");
     private static final Identifier RUSHERHACK = Identifier.of("kooda", "textures/spoof/rusher.png");

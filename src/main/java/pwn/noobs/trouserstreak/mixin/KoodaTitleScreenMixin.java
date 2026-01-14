@@ -26,7 +26,6 @@ public class KoodaTitleScreenMixin extends Screen {
         int buttonHeight = 20;
         int koodaButtonY = 0;
 
-        // Adjust position of existing buttons to make space
         for (Object child : this.children()) {
             if (child instanceof ClickableWidget widget) {
                 String widgetText = widget.getMessage().getString();
@@ -44,18 +43,16 @@ public class KoodaTitleScreenMixin extends Screen {
             }
         }
 
-        // Fallback position if Realms button isn't found
         if (koodaButtonY == 0) {
             koodaButtonY = (this.height / 4 + 48) + 72 - shiftUp;
         }
 
         int x = this.width / 2 - 100;
 
-        // The Kooda Button: Copies Discord link and shows a Toast notification
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Kooda"), button -> {
                     MinecraftClient client = MinecraftClient.getInstance();
                     if (client != null) {
-                        client.keyboard.setClipboard("https://discord.gg/h3WS6Qv2");
+                        client.keyboard.setClipboard("https://discord.gg/7Df3rut7Gt");
 
                         SystemToast.add(
                                 client.getToastManager(),

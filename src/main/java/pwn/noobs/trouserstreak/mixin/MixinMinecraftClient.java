@@ -36,7 +36,7 @@ public abstract class MixinMinecraftClient {
     private String generateKoodaTitle() {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("Kooda Addon v0.3.2");
+        sb.append("Kooda Addon v0.4.1");
 
         if (this.player != null) {
             sb.append(" | User: ").append(MinecraftClient.getInstance().getSession().getUsername());

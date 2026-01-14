@@ -7,7 +7,7 @@ import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.component.DataComponentTypes; // Importante para 1.21
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
@@ -21,7 +21,7 @@ public class KoodaSoundFX extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgVolume = settings.createGroup("Volume");
 
-    // --- Toggles ---
+
     private final Setting<Boolean> crystalSound = sgGeneral.add(new BoolSetting.Builder()
             .name("crystal-explosion")
             .description("Plays random sound from Crystal folder.")
@@ -50,7 +50,7 @@ public class KoodaSoundFX extends Module {
             .build()
     );
 
-    // --- Volume ---
+
     private final Setting<Double> masterVolume = sgVolume.add(new DoubleSetting.Builder()
             .name("master-volume")
             .defaultValue(1.0)
@@ -59,15 +59,15 @@ public class KoodaSoundFX extends Module {
             .build()
     );
 
-    // --- Directories ---
+
     private final File mainFolder = new File(MinecraftClient.getInstance().runDirectory, "Kooda/SoundFX");
 
-    // Categories
+
     private final File crystalFolder = new File(mainFolder, "Crystal");
     private final File popFolder = new File(mainFolder, "Pop");
     private final File anchorFolder = new File(mainFolder, "Anchor");
 
-    // Eat Sub-folders
+
     private final File eatMainFolder = new File(mainFolder, "Eat");
     private final File eatChewFolder = new File(eatMainFolder, "Eating");
     private final File eatFinishFolder = new File(eatMainFolder, "Finished");
@@ -101,23 +101,23 @@ public class KoodaSoundFX extends Module {
     private void onPacketReceive(PacketEvent.Receive event) {
         if (mc.world == null || mc.player == null) return;
 
-        // 1. Totem Pops
+
         if (event.packet instanceof EntityStatusS2CPacket packet && popSound.get()) {
             if (packet.getStatus() == 35) {
                 playRandomSound(popFolder);
             }
         }
 
-        // 2. Explosions & Anchors
+
         if (event.packet instanceof PlaySoundS2CPacket packet) {
-            // FIX: Robust way to get Sound ID in 1.21
+
             String soundId = "unknown";
 
-            // Try to get ID from registry key (Safest for 1.21)
+
             if (packet.getSound().getKey().isPresent()) {
                 soundId = packet.getSound().getKey().get().getValue().toString();
             } else {
-                // Fallback attempt
+
                 soundId = packet.getSound().value().toString();
             }
 
@@ -140,7 +140,7 @@ public class KoodaSoundFX extends Module {
         if (mc.player.isUsingItem()) {
             ItemStack stack = mc.player.getActiveItem();
 
-            // FIX: Robust isFood check using DataComponents for 1.21
+
             boolean isFood = stack.contains(DataComponentTypes.FOOD);
             boolean isPotion = stack.getItem().toString().contains("potion");
 
@@ -148,14 +148,13 @@ public class KoodaSoundFX extends Module {
                 isEating = true;
                 eatTimer++;
 
-                // Play chewing sound every 4 ticks
+
                 if (eatTimer % 4 == 0) {
                     playRandomSound(eatChewFolder);
                 }
             }
         } else {
             if (isEating) {
-                // If we ate for long enough (standard eat time is ~32 ticks)
                 if (eatTimer > 20) {
                     playRandomSound(eatFinishFolder);
                 }
@@ -182,14 +181,12 @@ public class KoodaSoundFX extends Module {
 
                 if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                     FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-                    // Robust log volume scaling
                     float gain = (float) (Math.log10(masterVolume.get()) * 20);
                     gainControl.setValue(Math.min(Math.max(gain, gainControl.getMinimum()), gainControl.getMaximum()));
                 }
 
                 clip.start();
 
-                // Clean up resources
                 clip.addLineListener(e -> {
                     if (e.getType() == LineEvent.Type.STOP) {
                         clip.close();

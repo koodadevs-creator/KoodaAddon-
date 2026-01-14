@@ -16,7 +16,7 @@ import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity; // IMPORT AGREGADO (Corrección Error 3)
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
@@ -32,31 +32,31 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class KoodaSelfTrap extends Module {
 
-    // ================= GROUP DEFINITIONS =================
+
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgShape = settings.createGroup("Shape & Mode");
     private final SettingGroup sgLogic = settings.createGroup("Logic & Safety");
     private final SettingGroup sgPlace = settings.createGroup("Placement");
     private final SettingGroup sgRender = settings.createGroup("Visuals");
 
-    // ================= MODES =================
+
     public enum Mode {
-        Full,       // Classic full trap
-        Top,        // Only overhead
-        Head,       // Surround head + top
-        AntiFace,   // Head + Front (Anti-City)
-        FullAntiStep// Full trap preventing step-up
+        Full,
+        Top,
+        Head,
+        AntiFace,
+        FullAntiStep
     }
 
     public enum CenterMode {
         None,
-        Teleport,   // Instant TP to center
-        Nudge       // Slow movement to center
+        Teleport,
+        Nudge
     }
 
-    // ================= SETTINGS =================
 
-    // --- SHAPE ---
+
+
     private final Setting<Mode> mode = sgShape.add(new EnumSetting.Builder<Mode>()
             .name("trap-mode")
             .description("The geometric shape of the self-trap.")
@@ -71,7 +71,6 @@ public class KoodaSelfTrap extends Module {
             .build()
     );
 
-    // --- LOGIC ---
     private final Setting<Boolean> autoDisable = sgLogic.add(new BoolSetting.Builder()
             .name("auto-disable")
             .description("Disables module after finishing the trap.")
@@ -109,7 +108,6 @@ public class KoodaSelfTrap extends Module {
             .build()
     );
 
-    // --- PLACEMENT ---
     private final Setting<Integer> delay = sgPlace.add(new IntSetting.Builder()
             .name("place-delay")
             .description("Ticks between placement batches.")
@@ -148,7 +146,6 @@ public class KoodaSelfTrap extends Module {
             .build()
     );
 
-    // --- RENDER ---
     private final Setting<Boolean> render = sgRender.add(new BoolSetting.Builder().name("render").defaultValue(true).build());
     private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>().name("shape-mode").defaultValue(ShapeMode.Both).build());
     private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder().name("side-color").defaultValue(new SettingColor(0, 255, 255, 20)).build());
@@ -156,11 +153,9 @@ public class KoodaSelfTrap extends Module {
     private final Setting<Double> slideSpeed = sgRender.add(new DoubleSetting.Builder().name("slide-speed").defaultValue(8.0).min(1.0).max(20.0).build());
     private final Setting<Double> renderTime = sgRender.add(new DoubleSetting.Builder().name("render-time").description("How long the box stays visible.").defaultValue(1.0).min(0).max(5).build());
 
-    // ================= STATE VARIABLES =================
     private int timer = 0;
     private int ticksPassed = 0;
 
-    // Render Cache
     private final Map<BlockPos, Long> renderQueue = new ConcurrentHashMap<>();
     private final Map<BlockPos, Double> animationY = new ConcurrentHashMap<>();
 
@@ -199,24 +194,20 @@ public class KoodaSelfTrap extends Module {
 
         ticksPassed++;
 
-        // Delay Logic
         if (timer > 0) {
             timer--;
             return;
         }
 
-        // 1. Inventory Check (Mega Robust)
         FindItemResult item = findBlock();
         if (!item.found()) {
             if (autoDisable.get()) toggle();
             return;
         }
 
-        // 2. Calculate Base Position (Prediction) - FIXED: Replaced getPos() with manual Vec3d
         BlockPos playerPos;
         if (prediction.get()) {
             Vec3d velocity = mc.player.getVelocity();
-            // Manually construct position to avoid mapping errors
             Vec3d currentPos = new Vec3d(mc.player.getX(), mc.player.getY(), mc.player.getZ());
             Vec3d predictedVec = currentPos.add(velocity.x * predictionTicks.get(), 0, velocity.z * predictionTicks.get());
             playerPos = BlockPos.ofFloored(predictedVec);
@@ -224,15 +215,12 @@ public class KoodaSelfTrap extends Module {
             playerPos = mc.player.getBlockPos();
         }
 
-        // Adjust Y if inside block (Burrow fix)
         if (!mc.world.getBlockState(playerPos).isReplaceable()) {
             playerPos = playerPos.up();
         }
 
-        // 3. Generate Schema
         List<BlockPos> placementQueue = getPlacementPositions(playerPos);
 
-        // 4. Process Queue
         if (placementQueue.isEmpty()) {
             if (autoDisable.get()) toggle();
             return;
@@ -243,7 +231,6 @@ public class KoodaSelfTrap extends Module {
         for (BlockPos pos : placementQueue) {
             if (placedThisTick >= blocksPerTick.get()) break;
 
-            // Pre-Validation
             if (!isValidPos(pos)) continue;
 
             // Entity Blocking Logic (Crystal Breaker)
@@ -336,10 +323,6 @@ public class KoodaSelfTrap extends Module {
         }
     }
 
-    /**
-     * Breadth-First Search for nearest support block.
-     * Robust against floating blocks.
-     */
     private BlockPos findSupport(BlockPos pos) {
         // 1. Check Down (Best support)
         if (isValidPos(pos.down()) && hasSolidNeighbor(pos.down())) return pos.down();

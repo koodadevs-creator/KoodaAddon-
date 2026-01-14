@@ -17,7 +17,6 @@ import pwn.noobs.trouserstreak.KoodaAddon;
 public class KoodaNoGlitchBlocks extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    // General Settings
     private final Setting<Boolean> placeSync = sgGeneral.add(new BoolSetting.Builder()
             .name("placement-sync")
             .description("Forces server synchronization when placing blocks to prevent ghost air.")
@@ -44,7 +43,6 @@ public class KoodaNoGlitchBlocks extends Module {
     private int tickTimer = 0;
 
     public KoodaNoGlitchBlocks() {
-        // Correct Category: KOODA_UTILITY
         super(KoodaAddon.KOODA_UTILITY, "kooda-no-glitch-blocks", "Robust anti-desync system for high-speed placement and breaking.");
     }
 
@@ -62,7 +60,6 @@ public class KoodaNoGlitchBlocks extends Module {
             return;
         }
 
-        // Reset timer
         tickTimer = tickDelay.get();
     }
 
@@ -70,14 +67,9 @@ public class KoodaNoGlitchBlocks extends Module {
     private void onSendPacket(PacketEvent.Send event) {
         if (mc.world == null || mc.player == null) return;
 
-        // Handle Placement Sync
         if (placeSync.get() && event.packet instanceof PlayerInteractBlockC2SPacket) {
-            // We verify the interaction without cancelling it to maintain speed.
-            // This hook ensures we are ready to catch a rollback.
-            // Note: In 1.21.10 strict logic, we trust the client prediction unless Mixin intervenes.
         }
 
-        // Handle Break Sync
         if (breakSync.get() && event.packet instanceof PlayerActionC2SPacket) {
             PlayerActionC2SPacket packet = (PlayerActionC2SPacket) event.packet;
 
@@ -86,21 +78,15 @@ public class KoodaNoGlitchBlocks extends Module {
                 Block block = mc.world.getBlockState(pos).getBlock();
 
                 if (block != Blocks.AIR && block != Blocks.BEDROCK) {
-                    // Logic handled in Mixin for speed, but this acts as a failsafe
                 }
             }
         }
     }
 
-    /**
-     * Utility method called by Mixins or other modules to force a block update.
-     * @param pos The position to resync.
-     */
+
     public void forceSync(BlockPos pos) {
         if (mc.world == null || mc.player == null) return;
 
-        // Sending an ABORT_DESTROY_BLOCK packet usually forces the server to send a BlockUpdate
-        // regarding the actual state of that block without breaking it.
         mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(
                 PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK,
                 pos,

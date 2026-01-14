@@ -78,7 +78,6 @@ public class KoodaBurrow extends Module {
             return;
         }
 
-        // Find valid block (Obsidian, EChest, etc.)
         FindItemResult result = InvUtils.findInHotbar(itemStack ->
                 itemStack.getItem() instanceof BlockItem && (
                         itemStack.getItem() == Items.OBSIDIAN ||
@@ -103,13 +102,10 @@ public class KoodaBurrow extends Module {
             return;
         }
 
-        // 1. Center Player
         if (center.get()) {
             PlayerUtils.centerPlayer();
         }
 
-        // 2. Jump Sequence (The "Packet" dance)
-        // These specific heights mimic a vanilla jump to trick the server
         if (mode.get() == Mode.Packet) {
             mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY() + 0.41999998688698, mc.player.getZ(), true, false));
             mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY() + 0.7531999805212, mc.player.getZ(), true, false));
@@ -117,7 +113,6 @@ public class KoodaBurrow extends Module {
             mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY() + 1.16610926093821, mc.player.getZ(), true, false));
         }
 
-        // 3. Place Block
         int prevSlot = mc.player.getInventory().selectedSlot;
         InvUtils.swap(result.slot(), false);
 
@@ -129,12 +124,8 @@ public class KoodaBurrow extends Module {
 
         InvUtils.swap(prevSlot, false);
 
-        // 4. The Rubberband (Force server to reset position)
-        // If offset is positive, we teleport UP so the server drags us down.
-        // If offset is negative, we teleport DOWN.
         double off = offset.get();
 
-        // Use Position packet (not PositionAndOnGround) to force a desync check
         mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(
                 mc.player.getX(),
                 mc.player.getY() + off,
@@ -149,21 +140,19 @@ public class KoodaBurrow extends Module {
     }
 
     private void placeBlock(BlockPos pos) {
-        // Create a fake interaction result to place the block at our feet
         BlockHitResult hit = new BlockHitResult(
-                new Vec3d(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5), // Hit center
+                new Vec3d(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5),
                 Direction.UP,
                 pos,
                 false
         );
 
-        // Interact
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         mc.player.networkHandler.sendPacket(new HandSwingC2SPacket(Hand.MAIN_HAND));
     }
 
     public enum Mode {
         Packet,
-        Teleport // Placeholder for future expansion, currently acts same as Packet but skips jump
+        Teleport
     }
 }

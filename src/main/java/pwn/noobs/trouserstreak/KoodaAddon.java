@@ -36,7 +36,7 @@ public class KoodaAddon extends MeteorAddon {
         System.out.println(" | . \\ (_) | (_) | (_| | (_| |");
         System.out.println(" |_|\\_\\___/ \\___/ \\__,_|\\__,_|");
         System.out.println("                               ");
-        System.out.println(" Kooda Addon v0.3.2 Initialized");
+        System.out.println(" Kooda Addon v0.4.1 Initialized");
 
         Modules.get().add(new PanicButton());
         Modules.get().add(new AutoBookBan());
@@ -57,8 +57,23 @@ public class KoodaAddon extends MeteorAddon {
         Modules.get().add(new SurroundPlus());
         Modules.get().add(new KoodaParticles());
         Modules.get().add(new ProjectileInterceptor());
+        Modules.get().add(new AntiBot());
+        Modules.get().add(new Confuse());
+        Modules.get().add(new AutoLogin());
+        Modules.get().add(new SoundLocator());
+        Modules.get().add(new ChatBot());
+        Modules.get().add(new AntiCrash());
+        Modules.get().add(new NoJumpDelay());
+        Modules.get().add(new KoodaRPC());
+        Modules.get().add(new AutoObsidian());
+        Modules.get().add(new KoodaAutoTotem());
+        Modules.get().add(new SpawnGlitch());
+        Modules.get().add(new MaceDMG());
+        Modules.get().add(new KoodaNoPop());
+        Modules.get().add(new KoodaCrawlTrap());
 
 
+        Hud.get().register(CrystalMetrics.INFO);
         Hud.get().register(KeyBindHud.INFO);
         Hud.get().register(WatermarkHud.INFO);
         Hud.get().register(VisualRangeHud.INFO);
@@ -70,6 +85,7 @@ public class KoodaAddon extends MeteorAddon {
         Hud.get().register(RealTimeClock.INFO);
         Hud.get().register(BitCoinHud.INFO);
         Hud.get().register(ClientSpooferHud.INFO);
+        Hud.get().register(KoodaArrayList.INFO);
     }
 
     @Override

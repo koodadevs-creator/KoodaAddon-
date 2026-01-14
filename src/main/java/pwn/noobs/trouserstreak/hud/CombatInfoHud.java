@@ -26,13 +26,11 @@ public class CombatInfoHud extends HudElement {
             CombatInfoHud::new
     );
 
-    // FIXED: Added missing MinecraftClient instance
     private final MinecraftClient mc = MinecraftClient.getInstance();
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgStyle = settings.createGroup("Style");
 
-    // --- GENERAL SETTINGS ---
     private final Setting<List<Item>> items = sgGeneral.add(new ItemListSetting.Builder()
             .name("items")
             .description("Select the items to display.")

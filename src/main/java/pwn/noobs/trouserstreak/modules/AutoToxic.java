@@ -24,7 +24,6 @@ public class AutoToxic extends Module {
     private final SettingGroup sgAutoPop = settings.createGroup("Auto Pop (Totems)");
     private final SettingGroup sgAutoExcuse = settings.createGroup("Auto Excuse (Deaths)");
 
-    // --- GENERAL SETTINGS ---
     private final Setting<Boolean> ignoreFriends = sgGeneral.add(new BoolSetting.Builder()
             .name("ignore-friends")
             .description("Prevents sending toxic messages to friends.")
@@ -48,7 +47,6 @@ public class AutoToxic extends Module {
             .build()
     );
 
-    // --- AUTO EZ SETTINGS ---
     private final Setting<Boolean> enableEz = sgAutoEz.add(new BoolSetting.Builder()
             .name("enable-auto-ez")
             .description("Sends a message when you kill a player.")
@@ -80,7 +78,6 @@ public class AutoToxic extends Module {
             .build()
     );
 
-    // --- AUTO POP SETTINGS ---
     private final Setting<Boolean> enablePop = sgAutoPop.add(new BoolSetting.Builder()
             .name("enable-auto-pop")
             .description("Sends a message when a player pops a totem.")
@@ -101,7 +98,6 @@ public class AutoToxic extends Module {
             .build()
     );
 
-    // --- AUTO EXCUSE SETTINGS ---
     private final Setting<Boolean> enableExcuse = sgAutoExcuse.add(new BoolSetting.Builder()
             .name("enable-auto-excuse")
             .description("Sends a message when you die.")
@@ -124,16 +120,13 @@ public class AutoToxic extends Module {
             .build()
     );
 
-    // --- STATE VARIABLES ---
     private final Map<UUID, Integer> popCounts = new ConcurrentHashMap<>();
     private final Random random = new Random();
 
-    // Combat tracking
     private PlayerEntity currentTarget = null;
     private long lastAttackTime = 0;
     private long lastMessageTime = 0;
 
-    // Cycling indices
     private int ezIndex = 0;
     private int popIndex = 0;
     private int excuseIndex = 0;
@@ -159,12 +152,10 @@ public class AutoToxic extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
-        // Clean up target if we haven't hit them in a while
         if (currentTarget != null && System.currentTimeMillis() - lastAttackTime > targetTimeout.get() * 1000) {
             currentTarget = null;
         }
 
-        // Clean up pop counts for entities that are no longer valid to save memory
         if (mc.world != null && mc.player != null && mc.player.age % 100 == 0) {
             popCounts.keySet().removeIf(uuid -> mc.world.getPlayerByUuid(uuid) == null);
         }
@@ -185,12 +176,10 @@ public class AutoToxic extends Module {
         if (event.packet instanceof EntityStatusS2CPacket packet) {
             Entity entity = packet.getEntity(mc.world);
 
-            // Check for valid PlayerEntity
             if (!(entity instanceof PlayerEntity player)) return;
 
-            // STATUS 35: Totem Pop
             if (packet.getStatus() == 35) {
-                if (player.equals(mc.player)) return; // Ignore self pops
+                if (player.equals(mc.player)) return;
 
                 UUID uuid = player.getUuid();
                 int count = popCounts.getOrDefault(uuid, 0) + 1;
@@ -201,11 +190,8 @@ public class AutoToxic extends Module {
                 }
             }
 
-            // STATUS 3: Death
             if (packet.getStatus() == 3) {
-                // Logic for Self Death (Excuse)
                 if (player.equals(mc.player)) {
-                    // Reset stats
                     popCounts.clear();
                     currentTarget = null;
 
@@ -213,17 +199,13 @@ public class AutoToxic extends Module {
                         sendMessage(excuseMessages, null, 0, true);
                     }
                 }
-                // Logic for Enemy Death (Auto EZ)
                 else {
-                    // Only send EZ if we are the ones who targeted them recently
                     if (enableEz.get() && currentTarget != null && currentTarget.equals(player)) {
                         int finalPops = popCounts.getOrDefault(player.getUuid(), 0);
                         sendMessage(ezMessages, player, finalPops, false);
 
-                        // Reset target
                         currentTarget = null;
                     }
-                    // Remove player from pop list after death
                     popCounts.remove(player.getUuid());
                 }
             }
@@ -234,18 +216,14 @@ public class AutoToxic extends Module {
         List<String> messages = setting.get();
         if (messages.isEmpty()) return;
 
-        // Global Delay Check
         if (System.currentTimeMillis() - lastMessageTime < minDelay.get() * 1000) return;
 
-        // Friend Check (Only for aggressive messages, not excuses)
         if (!isExcuse && target != null && ignoreFriends.get() && Friends.get().isFriend(target)) {
             return;
         }
 
-        // Select Message
         String rawMessage = getNextMessage(setting, isExcuse);
 
-        // Format and Send
         String finalMessage = formatMessage(rawMessage, target, pops);
         ChatUtils.sendPlayerMsg(finalMessage);
 
@@ -259,7 +237,6 @@ public class AutoToxic extends Module {
             return messages.get(random.nextInt(messages.size()));
         }
 
-        // Sequential logic
         if (isExcuse) {
             return messages.get(excuseIndex++ % messages.size());
         } else if (setting == popMessages) {
@@ -275,7 +252,6 @@ public class AutoToxic extends Module {
         if (target != null) {
             String name = target.getName().getString();
 
-            // FIX: Manual Ping retrieval to avoid Method Signature errors
             int ping = 0;
             if (mc.getNetworkHandler() != null) {
                 PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(target.getUuid());
@@ -292,11 +268,9 @@ public class AutoToxic extends Module {
             result = result.replace("{hp}", String.valueOf(hp));
         }
 
-        // Stats
         result = result.replace("{pops}", String.valueOf(pops));
         result = result.replace("{random}", String.valueOf(random.nextInt(100)));
 
-        // Self Stats (Available for all message types)
         if (mc.player != null) {
             int myHp = (int) (mc.player.getHealth() + mc.player.getAbsorptionAmount());
             String weapon = mc.player.getMainHandStack().getName().getString();
@@ -305,7 +279,6 @@ public class AutoToxic extends Module {
             result = result.replace("{weapon}", weapon);
         }
 
-        // Server Info
         if (mc.getCurrentServerEntry() != null) {
             result = result.replace("{server}", mc.getCurrentServerEntry().address);
         }

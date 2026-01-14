@@ -20,10 +20,9 @@ public abstract class MixinClientPlayerInteractionManager {
     private void onBreakBlock(BlockPos pos, CallbackInfoReturnable<Boolean> info) {
         KoodaNoGlitchBlocks module = Modules.get().get(KoodaNoGlitchBlocks.class);
 
-        // Verify if module is active and configured to sync breaks
+
         if (module != null && module.isActive()) {
-            // We force a sync request on the exact block being broken.
-            // This ensures that if the break fails on the server, we get the update immediately.
+
             module.forceSync(pos);
         }
     }

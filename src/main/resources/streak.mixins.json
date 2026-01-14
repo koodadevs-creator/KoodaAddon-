@@ -6,7 +6,8 @@
     "MixinItemStack",
     "InventoryS2CPacketAccessor",
     "MixinEntity",
-    "MixinPacketByteBuf"
+    "MixinPacketByteBuf",
+    "MixinLivingEntity"
   ],
   "client": [
     "MixinClientPlayNetworkHandler",
